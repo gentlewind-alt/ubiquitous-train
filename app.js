@@ -748,7 +748,7 @@ def inspect_obj(obj, name=""):
         return None
         
     seen_ids.add(id(obj))
-    val = getattr(obj, 'data', getattr(obj, 'val', getattr(obj, 'value', getattr(obj, 'name', str(obj)))))
+    val = getattr(obj, 'key', getattr(obj, 'data', getattr(obj, 'val', getattr(obj, 'value', getattr(obj, 'name', str(obj))))))
     next_obj = getattr(obj, 'next', None)
     left_obj = getattr(obj, 'left', None)
     right_obj = getattr(obj, 'right', None)
@@ -841,7 +841,7 @@ for k, v in list(user_globals.items()):
                 })
                 idx += 1
         else:
-            head = getattr(v, 'head', v)
+            head = getattr(v, 'root', getattr(v, 'head', v))
             inspect_obj(head, k)
 
 json.dumps({
