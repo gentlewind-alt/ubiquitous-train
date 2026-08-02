@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Runtime Visualization Engine (RVE) - Professional Studio</title>
-    <meta name="description" content="Runtime Visualization Engine (RVE) — an interactive Python memory and object graph visualizer. Write Python code, step through execution, and inspect the heap in real time.">
+    <title>Runtime Visualization Engine (RVE) - Web Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="index.css">
     <!-- Pyodide WebAssembly Real CPython 3.11 Runtime -->
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
 </head>
 <body>
     <div class="app-container">
-        <!-- TOP NAVBAR TOOLBAR -->
+        <!-- TOP NAVBAR -->
         <header class="navbar">
             <div class="brand">
                 <div class="logo-icon">RVE</div>
@@ -28,25 +27,17 @@
                 <div class="preset-selector">
                     <label for="algorithm-select">Preset:</label>
                     <select id="algorithm-select">
-                        <option value="none">None (Blank Editor)</option>
-                        <option value="nested_comprehension">Nested Data &amp; List Comprehension</option>
-                        <option value="avl_tree" selected>AVL / Binary Search Tree</option>
-                        <option value="linked_list">Singly Linked List</option>
-                        <option value="stack_tower">Stack Tower (LIFO)</option>
-                        <option value="queue_ribbon">Queue Ribbon (FIFO)</option>
-                        <option value="heap_split">Min Heap (Array + Tree)</option>
-                        <option value="graph_adjacency">Graph (Adjacency Map)</option>
-                        <option value="hash_map">Hash Map / Dictionary</option>
+                        <option value="none" selected>None (Blank Editor)</option>
                     </select>
                 </div>
 
                 <div class="speed-selector">
                     <label for="speed-select">Speed:</label>
                     <select id="speed-select">
-                        <option value="0.25">Slow (0.25x)</option>
-                        <option value="0.5" selected>Normal (0.5x)</option>
-                        <option value="1.0">Fast (1.0x)</option>
-                        <option value="2.0">Very Fast (2.0x)</option>
+                        <option value="0.25">Slow</option>
+                        <option value="0.5" selected>Normal</option>
+                        <option value="1.0">Fast</option>
+                        <option value="2.0">Very Fast</option>
                     </select>
                 </div>
 
@@ -72,7 +63,7 @@
 
         <!-- MAIN SPLIT WORKSPACE -->
         <main class="workspace" id="workspace-container">
-            <!-- LEFT PANEL: CODE EDITOR -->
+            <!-- LEFT PANEL: CODE EDITOR & TERMINAL -->
             <section class="panel panel-editor" id="panel-editor">
                 <div class="panel-header">
                     <div class="panel-title">
@@ -84,16 +75,24 @@
                             Error Alerts: ON
                         </button>
                         <span class="file-tag" id="save-status-tag">Saved</span>
-                        <button id="btn-collapse-editor" class="btn-panel-collapse" title="Collapse editor (maximize canvas)" aria-label="Collapse editor panel">
-                            <svg id="editor-collapse-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
-                        </button>
                     </div>
                 </div>
                 
                 <div class="editor-container" id="editor-container">
+                    <!-- FULL-WIDTH ACTIVE LINE HIGHLIGHT BAR -->
                     <div class="line-highlight-bar" id="line-highlight-bar"></div>
+
                     <div class="line-numbers" id="line-numbers"></div>
-                    <textarea id="code-editor" aria-label="Python Code Editor" spellcheck="false" placeholder="Write Python code here..."></textarea>
+                    <textarea id="code-editor" spellcheck="false" placeholder="Write Python code here..."></textarea>
+                </div>
+
+                <!-- TERMINAL / CONSOLE OUTPUT PANEL -->
+                <div class="terminal-container">
+                    <div class="terminal-header">
+                        <span>Console Output (stdout)</span>
+                        <button id="btn-clear-terminal">Clear</button>
+                    </div>
+                    <div class="terminal-body" id="terminal-output"></div>
                 </div>
 
                 <div class="status-bar">
@@ -102,36 +101,19 @@
                 </div>
             </section>
 
-            <!-- SLIM RAIL: shown when editor is collapsed, click to reopen -->
-            <div class="editor-reopen-rail" id="editor-reopen-rail" title="Reopen editor" aria-label="Reopen editor panel">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-            </div>
-
             <!-- DRAGGABLE SPLIT RESIZER GUTTER BAR -->
             <div class="resizer" id="drag-resizer"></div>
 
-            <!-- RIGHT PANEL: VISUALIZATION ENGINE CANVAS & PANELS -->
+            <!-- RIGHT PANEL: VISUALIZATION ENGINE CANVAS -->
             <section class="panel panel-visualizer" id="panel-visualizer">
                 <div class="panel-header">
                     <div class="panel-title">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                        <span id="canvas-title-text">Semantic DSA Visualizer</span>
+                        Native ECS Visualizer Canvas
                     </div>
                     <div class="canvas-stats">
-                        <div class="view-mode-toggle" id="view-mode-toggle">
-                            <button id="btn-view-auto" class="view-mode-btn active" title="Auto: Intelligent View Planner selects best projection">Auto</button>
-                            <button id="btn-view-learning" class="view-mode-btn" title="Learning: Clean Data Structure with Educational Annotations">Learning</button>
-                            <button id="btn-view-runtime" class="view-mode-btn" title="Runtime: Object Graph &amp; Pointer References">Runtime</button>
-                            <button id="btn-view-memory" class="view-mode-btn" title="Memory: Stack &amp; Heap Allocation Model">Memory</button>
-                            <button id="btn-view-debug" class="view-mode-btn" title="Debug: Execution Pipeline &amp; Event Stream Log">Debug</button>
-                        </div>
                         <span>Zoom: <strong id="zoom-counter">100%</strong></span>
-                        <span class="stat-divider">│</span>
-                        <span>Nodes: <strong id="entity-counter">0</strong></span>
-                        <span class="stat-divider">│</span>
-                        <span id="stat-refs">Refs: <strong>0</strong></span>
-                        <span class="stat-divider">│</span>
-                        <span id="stat-scope">Scope: <strong>—</strong></span>
+                        <span>Entities: <strong id="entity-counter">0</strong></span>
                     </div>
                 </div>
 
@@ -140,82 +122,35 @@
                     <div class="action-banner" id="action-banner">
                         <span class="action-badge" id="action-line-badge">Line 1</span>
                         <span id="action-description">Initial execution state</span>
-                        <span class="action-iter-badge" id="action-iter-badge" style="display:none"></span>
                     </div>
 
-                    <canvas id="visualizer-canvas" role="img" aria-label="Interactive 2D Memory Visualization Canvas"></canvas>
+                    <canvas id="visualizer-canvas"></canvas>
+                    
+                    <!-- DEVTOOLS INSPECTOR OVERLAY PANEL -->
+                    <aside class="inspector-overlay" id="inspector-panel">
+                        <div class="inspector-header">
+                            <h3>DevTools State Inspector</h3>
+                            <button id="btn-close-inspector">&times;</button>
+                        </div>
+                        <div class="inspector-body" id="inspector-content">
+                            <p class="empty-state">Click any node on the canvas to inspect underlying memory, CPython pointers, and ECS components.</p>
+                        </div>
+                    </aside>
                 </div>
 
-                <!-- BOTTOM IDE SPLIT BOTTOM PANE: CONSOLE / MEMORY / INSPECTOR / EVENT STREAM -->
-                <div class="bottom-pane-container">
-                    <div class="tab-header">
-                        <button class="tab-btn active" data-tab="console">Console</button>
-                        <button class="tab-btn" data-tab="pipeline">Pipeline Trace</button>
-                        <button class="tab-btn" data-tab="memory">Stack &amp; Heap</button>
-                        <button class="tab-btn" data-tab="inspector">OBJ Inspector</button>
-                        <button class="tab-btn" data-tab="events">Event Log</button>
-                        <button id="btn-collapse-console" class="btn-pane-collapse" title="Collapse console (maximize canvas)" aria-label="Collapse console pane">
-                            <svg id="console-collapse-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="18 15 12 9 6 15"></polyline></svg>
-                        </button>
-                    </div>
-
-                    <div class="tab-content active" id="tab-console">
-                        <div class="terminal-body" id="terminal-output"></div>
-                    </div>
-
-                    <div class="tab-content" id="tab-pipeline">
-                        <div id="pipeline-stream-list" class="event-stream-log">
-                            <p class="empty-state">Run code to see the execution pipeline trace here.</p>
-                        </div>
-                    </div>
-
-                    <div class="tab-content" id="tab-memory">
-                        <div class="memory-grid">
-                            <div class="memory-col">
-                                <h4>Stack Frame (Variables)</h4>
-                                <div id="stack-frame-list" class="memory-list">
-                                    <p class="empty-state">No active stack variables.</p>
-                                </div>
-                            </div>
-                            <div class="memory-col">
-                                <h4>Heap Space (Objects)</h4>
-                                <div id="heap-space-list" class="memory-list">
-                                    <p class="empty-state">No heap objects allocated.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="tab-content" id="tab-inspector">
-                        <div id="inspector-content" class="inspector-detail-view">
-                            <p class="empty-state">Click any object node on the canvas to inspect underlying CPython memory, type flags, and reference counts.</p>
-                        </div>
-                    </div>
-
-                    <div class="tab-content" id="tab-events">
-                        <div id="event-stream-list" class="event-stream-log">
-                            <div class="event-log-item info">
-                                <span class="event-tag">ENGINE_INIT</span>
-                                <span class="event-msg">Pyodide CPython 3.11 Runtime Initialized</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- BOTTOM TIMELINE SCRUBBER METRICS BAR -->
+                <!-- BOTTOM TIMELINE SCRUBBER WITH PLAY/PAUSE BUTTON BEFORE FRAME -->
                 <div class="timeline-bar">
                     <button id="btn-timeline-play" class="btn-play-pause-small" title="Toggle Auto Playback / Pause">
                         <svg id="timeline-play-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                     </button>
                     <span class="time-label" id="current-frame-label">Frame: 0 / 0</span>
-                    <input type="range" id="timeline-slider" aria-label="Timeline Frame Scrubber" min="0" max="0" value="0" step="1">
+                    <input type="range" id="timeline-slider" min="0" max="0" value="0" step="1">
                     <span class="time-stamp" id="current-timestamp-label">0ms</span>
                 </div>
             </section>
         </main>
     </div>
 
-    <script src="semantic-viz.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
