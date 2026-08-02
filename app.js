@@ -741,11 +741,16 @@ seen_ids = set()
 IMMUTABLE_TYPES = {'int', 'float', 'str', 'bool', 'tuple', 'frozenset', 'bytes', 'NoneType'}
 
 def get_node_height(node):
-    if not node: return 0
-    return getattr(node, 'height', max(get_node_height(getattr(node, 'left', None)), get_node_height(getattr(node, 'right', None))) + 1)
+    if not node or callable(node): return 0
+    h_attr = getattr(node, 'height', None)
+    if isinstance(h_attr, (int, float)):
+        return int(h_attr)
+    lh = get_node_height(getattr(node, 'left', None))
+    rh = get_node_height(getattr(node, 'right', None))
+    return max(lh, rh) + 1
 
 def inspect_obj(obj, name=""):
-    if obj is None or id(obj) in seen_ids:
+    if obj is None or id(obj) in seen_ids or callable(obj):
         return None
     cls_name = type(obj).__name__
     if cls_name in ['int', 'str', 'float', 'bool', 'list', 'dict', 'set', 'tuple', 'frozenset', 'module', 'function', 'type']:
@@ -753,15 +758,23 @@ def inspect_obj(obj, name=""):
         
     seen_ids.add(id(obj))
     val = getattr(obj, 'key', getattr(obj, 'data', getattr(obj, 'val', getattr(obj, 'value', getattr(obj, 'name', str(obj))))))
+    if callable(val):
+        val = str(obj)
     next_obj = getattr(obj, 'next', None)
     left_obj = getattr(obj, 'left', None)
     right_obj = getattr(obj, 'right', None)
     manager_obj = getattr(obj, 'manager', None)
     
+    if callable(next_obj): next_obj = None
+    if callable(left_obj): left_obj = None
+    if callable(right_obj): right_obj = None
+    if callable(manager_obj): manager_obj = None
+
     lh = get_node_height(left_obj)
     rh = get_node_height(right_obj)
-    h = getattr(obj, 'height', max(lh, rh) + 1)
-    bf = lh - rh
+    h_attr = getattr(obj, 'height', None)
+    h = int(h_attr) if isinstance(h_attr, (int, float)) else (max(lh, rh) + 1)
+    bf = int(lh - rh)
 
     obj_data = {
         "id": f"py_0x{id(obj):x}",
@@ -786,7 +799,7 @@ def inspect_obj(obj, name=""):
     return obj_data["id"]
 
 for k, v in list(user_globals.items()):
-    if not k.startswith('__'):
+    if not k.startswith('__') and not callable(v) and not isinstance(v, type):
         cls_name = type(v).__name__
         is_immut = cls_name in IMMUTABLE_TYPES
         
