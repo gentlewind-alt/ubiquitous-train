@@ -1,4 +1,4 @@
-// --- RVE WEB APPLICATION CORE ENGINE (ERROR ALERTS TOGGLE & RULE CONFLICT ENGINE) ---
+// --- RVE WEB APPLICATION CORE ENGINE (REINGOLD-TILFORD TREE LAYOUT & AVL SEMANTICS) ---
 
 const PRESETS = {
     none: ""
@@ -718,7 +718,7 @@ class RVEApplication {
         }
     }
 
-    // --- CPYTHON INTROSPECTION WITH RULE CONFLICT & ERROR ALERTS INTERCEPTOR ---
+    // --- CPYTHON INTROSPECTION WITH AVL SEMANTICS & HEIGHT/BALANCE COMPUTATION ---
     async executePyodide(userCode) {
         const runnerScript = `
 import sys
@@ -740,6 +740,10 @@ objects = []
 seen_ids = set()
 IMMUTABLE_TYPES = {'int', 'float', 'str', 'bool', 'tuple', 'frozenset', 'bytes', 'NoneType'}
 
+def get_node_height(node):
+    if not node: return 0
+    return getattr(node, 'height', max(get_node_height(getattr(node, 'left', None)), get_node_height(getattr(node, 'right', None))) + 1)
+
 def inspect_obj(obj, name=""):
     if obj is None or id(obj) in seen_ids:
         return None
@@ -754,13 +758,20 @@ def inspect_obj(obj, name=""):
     right_obj = getattr(obj, 'right', None)
     manager_obj = getattr(obj, 'manager', None)
     
+    lh = get_node_height(left_obj)
+    rh = get_node_height(right_obj)
+    h = getattr(obj, 'height', max(lh, rh) + 1)
+    bf = lh - rh
+
     obj_data = {
         "id": f"py_0x{id(obj):x}",
         "varName": name or cls_name,
         "label": str(val),
-        "type": "TreeNode" if (left_obj or right_obj or 'Tree' in cls_name) else "Node",
+        "type": "TreeNode" if (left_obj or right_obj or 'Tree' in cls_name or hasattr(obj, 'key')) else "Node",
         "pyType": cls_name,
         "pyId": f"0x{id(obj):x}",
+        "height": h,
+        "balanceFactor": bf,
         "isImmutable": cls_name in IMMUTABLE_TYPES,
         "next": f"py_0x{id(next_obj):x}" if next_obj else None,
         "left": f"py_0x{id(left_obj):x}" if left_obj else None,
@@ -858,7 +869,6 @@ json.dumps({
             this.printTerminal(res.stdout, "output");
         }
 
-        // --- RULE CONFLICT & ERROR ALERT INTERCEPTOR ---
         if (res.error) {
             this.printTerminal(`[Rule Conflict / Exception] ${res.error}`, "output");
 
@@ -887,7 +897,6 @@ json.dumps({
         let timestamp = 1000;
 
         const objects = new Map();
-        let idCounter = 1;
         let inClassDef = false;
 
         lines.forEach((line, lineIndex) => {
@@ -909,12 +918,20 @@ json.dumps({
             let changed = false;
             let actionDesc = `Executed line ${lineNo}: ${cleanLine}`;
 
-            if (cleanLine.startsWith('if ') || cleanLine.startsWith('elif ') || cleanLine.startsWith('while ')) {
-                actionDesc = `Evaluating Condition Statement: ${cleanLine}`;
+            if (cleanLine.includes('rotate_left') || cleanLine.includes('rotate_right')) {
+                actionDesc = `AVL Rotation: ${cleanLine}`;
                 changed = true;
-            }
-            if (cleanLine.startsWith('print(')) {
-                actionDesc = `Printed output to console: ${cleanLine}`;
+            } else if (cleanLine.includes('insert(')) {
+                actionDesc = `AVL Insert Operation: ${cleanLine}`;
+                changed = true;
+            } else if (cleanLine.includes('delete(')) {
+                actionDesc = `AVL Delete Operation: ${cleanLine}`;
+                changed = true;
+            } else if (cleanLine.startsWith('if ') || cleanLine.startsWith('elif ') || cleanLine.startsWith('while ')) {
+                actionDesc = `Evaluating Condition: ${cleanLine}`;
+                changed = true;
+            } else if (cleanLine.startsWith('print(')) {
+                actionDesc = `Output: ${cleanLine}`;
                 changed = true;
             }
 
@@ -946,13 +963,21 @@ json.dumps({
         }];
     }
 
-    // --- DYNAMIC MULTI-VARIABLE ROW SOLVER ---
+    // --- REINGOLD-TILFORD INSPIRED TREE LAYOUT SOLVER (NO OVERLAPS & CLEAN HIERARCHY) ---
     solveLayoutConstraintsForObjects(objects) {
         if (!objects || objects.length === 0) return [];
 
-        const varGroups = new Map();
+        // 1. Filter out redundant Primitive objects if a Tree Graph is active to eliminate duplicate representations
+        const treeNodes = objects.filter(o => o.type === "TreeNode");
+        let activeObjects = objects;
 
-        objects.forEach(obj => {
+        if (treeNodes.length > 0) {
+            // Filter out primitives named 'root' or redundant object pointers
+            activeObjects = objects.filter(o => !(o.type === "Primitive" && (o.varName === "root" || o.varName.startsWith("t"))));
+        }
+
+        const varGroups = new Map();
+        activeObjects.forEach(obj => {
             let groupKey = obj.varName ? obj.varName.split('[')[0].split('{')[0].split('.')[0] : obj.type;
             if (!varGroups.has(groupKey)) {
                 varGroups.set(groupKey, []);
@@ -981,26 +1006,48 @@ json.dumps({
                 });
                 currentY += Math.ceil(groupObjects.length / 10) * 65 + 50;
             } else if (firstType === "TreeNode") {
+                // Reingold-Tilford Tree Layout Solver
                 const root = groupObjects[0];
-                const cx = (this.canvas.width / 2) || 350;
-                root.x = cx;
-                root.y = currentY + 30;
+                const cx = (this.canvas.width / 2) || 380;
 
-                const positionTree = (node, x, y, offset) => {
+                const getSubtreeWidth = (nodeId, level = 0) => {
+                    const node = activeObjects.find(o => o.id === nodeId);
+                    if (!node) return 0;
+
+                    const leftW = node.left ? getSubtreeWidth(node.left, level + 1) : 0;
+                    const rightW = node.right ? getSubtreeWidth(node.right, level + 1) : 0;
+                    return Math.max(1, leftW + rightW);
+                };
+
+                const positionReingoldTilford = (nodeId, x, y, levelSpacing) => {
+                    const node = activeObjects.find(o => o.id === nodeId);
                     if (!node) return;
+
                     node.x = x;
                     node.y = y;
+
+                    // Color node based on balance factor (|bf| > 1 gets highlighted amber/red)
+                    if (Math.abs(node.balanceFactor || 0) > 1) {
+                        node.color = "#EF4444"; // Unbalanced highlight
+                    } else {
+                        node.color = "#6366F1"; // Balanced Indigo
+                    }
+
+                    const nextSpacing = Math.max(28, levelSpacing / 1.75);
+
                     if (node.left) {
-                        const leftNode = objects.find(o => o.id === node.left);
-                        if (leftNode) { leftNode.color = "#EC4899"; positionTree(leftNode, x - offset, y + 75, offset / 1.8); }
+                        positionReingoldTilford(node.left, x - levelSpacing, y + 68, nextSpacing);
                     }
                     if (node.right) {
-                        const rightNode = objects.find(o => o.id === node.right);
-                        if (rightNode) { rightNode.color = "#EC4899"; positionTree(rightNode, x + offset, y + 75, offset / 1.8); }
+                        positionReingoldTilford(node.right, x + levelSpacing, y + 68, nextSpacing);
                     }
                 };
-                positionTree(root, cx, currentY + 30, 140);
-                currentY += 220;
+
+                const treeWidth = getSubtreeWidth(root.id);
+                const initialLevelSpacing = Math.max(45, Math.min(180, treeWidth * 18));
+
+                positionReingoldTilford(root.id, cx, currentY + 30, initialLevelSpacing);
+                currentY += 320;
             } else { // Linked list / General Node
                 groupObjects.forEach((node, idx) => {
                     node.x = startX + idx * 130;
@@ -1010,7 +1057,7 @@ json.dumps({
             }
         });
 
-        return objects;
+        return activeObjects;
     }
 
     seekToFrame(frameIndex) {
@@ -1063,8 +1110,9 @@ json.dumps({
         requestAnimationFrame(render);
     }
 
+    // --- DRAW CONNECTIONS WITH LEFT (L) & RIGHT (R) EDGE SEMANTICS ---
     drawConnections() {
-        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
         this.ctx.lineWidth = 2;
 
         const renderedEdges = new Set();
@@ -1085,17 +1133,35 @@ json.dumps({
             }
             if (entity.left && this.entities.has(entity.left)) {
                 const target = this.entities.get(entity.left);
-                this.drawLine(entity.x - 12, entity.y + 18, target.x + 12, target.y - 18);
+                this.drawLineWithEdgeBadge(entity.x - 10, entity.y + 16, target.x + 10, target.y - 16, "L");
             }
             if (entity.right && this.entities.has(entity.right)) {
                 const target = this.entities.get(entity.right);
-                this.drawLine(entity.x + 12, entity.y + 18, target.x - 12, target.y - 18);
+                this.drawLineWithEdgeBadge(entity.x + 10, entity.y + 16, target.x - 10, target.y - 16, "R");
             }
             if (entity.manager && this.entities.has(entity.manager)) {
                 const target = this.entities.get(entity.manager);
                 this.drawArrow(entity.x, entity.y - 20, target.x, target.y + 20);
             }
         });
+    }
+
+    drawLineWithEdgeBadge(x1, y1, x2, y2, label) {
+        this.ctx.beginPath();
+        this.ctx.moveTo(x1, y1);
+        this.ctx.lineTo(x2, y2);
+        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+        this.ctx.stroke();
+
+        // Edge label badge (L / R)
+        const midX = (x1 + x2) / 2;
+        const midY = (y1 + y2) / 2;
+        
+        this.ctx.fillStyle = label === "L" ? "#EC4899" : "#10B981";
+        this.ctx.font = "700 9px Fira Code, monospace";
+        this.ctx.textAlign = "center";
+        this.ctx.textBaseline = "middle";
+        this.ctx.fillText(label, midX + (label === "L" ? -7 : 7), midY);
     }
 
     drawSelfLoopArc(x, y) {
@@ -1113,15 +1179,12 @@ json.dumps({
         this.ctx.fill();
     }
 
-    drawLine(x1, y1, x2, y2) {
+    drawArrow(x1, y1, x2, y2) {
         this.ctx.beginPath();
         this.ctx.moveTo(x1, y1);
         this.ctx.lineTo(x2, y2);
         this.ctx.stroke();
-    }
 
-    drawArrow(x1, y1, x2, y2) {
-        this.drawLine(x1, y1, x2, y2);
         const headlen = 8;
         const angle = Math.atan2(y2 - y1, x2 - x1);
         this.ctx.beginPath();
@@ -1132,13 +1195,14 @@ json.dumps({
         this.ctx.fill();
     }
 
+    // --- DRAW ENTITIES WITH MINIMAL LABELS & HEIGHT/BALANCE BADGES ---
     drawEntities() {
         this.entities.forEach(entity => {
             const isSelected = entity.id === this.selectedEntityId;
 
             if (isSelected) {
                 this.ctx.beginPath();
-                this.ctx.arc(entity.x, entity.y, 30, 0, Math.PI * 2);
+                this.ctx.arc(entity.x, entity.y, 28, 0, Math.PI * 2);
                 this.ctx.fillStyle = "rgba(99, 102, 241, 0.25)";
                 this.ctx.fill();
                 this.ctx.strokeStyle = "#6366F1";
@@ -1146,7 +1210,30 @@ json.dumps({
                 this.ctx.stroke();
             }
 
-            if (entity.type === "Primitive") {
+            if (entity.type === "TreeNode") {
+                this.ctx.beginPath();
+                this.ctx.arc(entity.x, entity.y, 20, 0, Math.PI * 2);
+                this.ctx.fillStyle = entity.color || "#6366F1";
+                this.ctx.fill();
+                this.ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+
+                // Minimal Clean Value Label (e.g. "50")
+                this.ctx.fillStyle = "#FFFFFF";
+                this.ctx.font = "700 13px Fira Code, monospace";
+                this.ctx.textAlign = "center";
+                this.ctx.textBaseline = "middle";
+                this.ctx.fillText(entity.label, entity.x, entity.y);
+
+                // Height & Balance Factor Micro Badge (e.g. "h=3 bf=0")
+                if (entity.height !== undefined) {
+                    this.ctx.fillStyle = "#94A3B8";
+                    this.ctx.font = "600 9px Fira Code, monospace";
+                    this.ctx.textAlign = "center";
+                    this.ctx.fillText(`h=${entity.height} bf=${entity.balanceFactor ?? 0}`, entity.x, entity.y + 28);
+                }
+            } else if (entity.type === "Primitive") {
                 this.ctx.fillStyle = "rgba(245, 158, 11, 0.15)";
                 this.ctx.beginPath();
                 this.ctx.roundRect(entity.x - 70, entity.y - 20, 140, 40, 8);
@@ -1193,35 +1280,6 @@ json.dumps({
                 this.ctx.lineWidth = 2;
                 this.ctx.strokeRect(entity.x - 25, entity.y - 25, 50, 50);
 
-                if (entity.pointerLabel) {
-                    const badgeY = entity.y - 42;
-                    const badgeWidth = 32;
-                    const badgeHeight = 20;
-
-                    this.ctx.shadowColor = entity.color;
-                    this.ctx.shadowBlur = 10;
-
-                    this.ctx.fillStyle = entity.color;
-                    this.ctx.beginPath();
-                    this.ctx.roundRect(entity.x - badgeWidth / 2, badgeY - badgeHeight / 2, badgeWidth, badgeHeight, 6);
-                    this.ctx.fill();
-
-                    this.ctx.shadowBlur = 0;
-
-                    this.ctx.fillStyle = "#000000";
-                    this.ctx.font = "700 12px Fira Code, monospace";
-                    this.ctx.textAlign = "center";
-                    this.ctx.textBaseline = "middle";
-                    this.ctx.fillText(entity.pointerLabel, entity.x, badgeY);
-
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(entity.x - 6, badgeY + 10);
-                    this.ctx.lineTo(entity.x + 6, badgeY + 10);
-                    this.ctx.lineTo(entity.x, badgeY + 17);
-                    this.ctx.fillStyle = entity.color;
-                    this.ctx.fill();
-                }
-
                 this.ctx.fillStyle = "#FFFFFF";
                 this.ctx.font = "600 13px Inter, sans-serif";
                 this.ctx.textAlign = "center";
@@ -1236,23 +1294,6 @@ json.dumps({
                 this.ctx.lineWidth = 2;
                 this.ctx.stroke();
 
-                if (entity.pointerLabel) {
-                    const badgeY = entity.y - 36;
-                    const badgeWidth = 36;
-                    const badgeHeight = 18;
-
-                    this.ctx.fillStyle = entity.color;
-                    this.ctx.beginPath();
-                    this.ctx.roundRect(entity.x - badgeWidth / 2, badgeY - badgeHeight / 2, badgeWidth, badgeHeight, 5);
-                    this.ctx.fill();
-
-                    this.ctx.fillStyle = "#000000";
-                    this.ctx.font = "700 11px Fira Code, monospace";
-                    this.ctx.textAlign = "center";
-                    this.ctx.textBaseline = "middle";
-                    this.ctx.fillText(entity.pointerLabel, entity.x, badgeY);
-                }
-
                 this.ctx.fillStyle = "#FFFFFF";
                 this.ctx.font = "600 13px Inter, sans-serif";
                 this.ctx.textAlign = "center";
@@ -1262,7 +1303,7 @@ json.dumps({
         });
     }
 
-    // --- DEVTOOLS INSPECTOR OVERLAY ---
+    // --- DEVTOOLS INSPECTOR OVERLAY WITH FULL AVL METADATA ---
     handleCanvasClick(e) {
         const rect = this.canvas.getBoundingClientRect();
         const rawMouseX = e.clientX - rect.left;
@@ -1289,38 +1330,42 @@ json.dumps({
 
     showInspector(entity) {
         this.inspectorPanel.style.display = 'flex';
-        const mutabilityHtml = entity.isImmutable 
-            ? `<span class="inspect-val" style="color: #F59E0B; font-weight: 700;">Immutable (Read-Only) 🔒</span>` 
-            : `<span class="inspect-val" style="color: #10B981; font-weight: 700;">Mutable (In-Place Modifications) ⚡</span>`;
+        
+        let extraInfo = '';
+        if (entity.height !== undefined) {
+            extraInfo = `
+                <div class="inspect-item">
+                    <span class="inspect-label">Height (h)</span>
+                    <span class="inspect-val">${entity.height}</span>
+                </div>
+                <div class="inspect-item">
+                    <span class="inspect-label">Balance Factor (bf)</span>
+                    <span class="inspect-val">${entity.balanceFactor ?? 0}</span>
+                </div>
+            `;
+        }
 
         this.inspectorContent.innerHTML = `
             <div class="inspect-item">
-                <span class="inspect-label">Entity ID</span>
-                <span class="inspect-val">${entity.id}</span>
+                <span class="inspect-label">Node Value</span>
+                <span class="inspect-val" style="color: #60A5FA; font-weight: 700;">${entity.label}</span>
             </div>
+            ${extraInfo}
             <div class="inspect-item">
                 <span class="inspect-label">Variable Name</span>
                 <span class="inspect-val">${entity.varName}</span>
-            </div>
-            <div class="inspect-item">
-                <span class="inspect-label">Python Class</span>
-                <span class="inspect-val">${entity.pyType}</span>
             </div>
             <div class="inspect-item">
                 <span class="inspect-label">CPython Pointer</span>
                 <span class="inspect-val">${entity.pyId}</span>
             </div>
             <div class="inspect-item">
-                <span class="inspect-label">Mutability Property</span>
-                ${mutabilityHtml}
+                <span class="inspect-label">Left Child</span>
+                <span class="inspect-val">${entity.left || 'None'}</span>
             </div>
             <div class="inspect-item">
-                <span class="inspect-label">Transform (Canvas X, Y)</span>
-                <span class="inspect-val">(${Math.round(entity.x)}, ${Math.round(entity.y)})</span>
-            </div>
-            <div class="inspect-item">
-                <span class="inspect-label">Value / Label</span>
-                <span class="inspect-val">${entity.label}</span>
+                <span class="inspect-label">Right Child</span>
+                <span class="inspect-val">${entity.right || 'None'}</span>
             </div>
         `;
     }
