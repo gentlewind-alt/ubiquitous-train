@@ -366,7 +366,7 @@ class RVEApplication {
             if (e.button === 0 || e.button === 1 || e.button === 2) {
                 this.isPanning = true;
                 this.startPanX = e.clientX - this.panX;
-                this.startPanY = e.clientY - this.startPanY;
+                this.startPanY = e.clientY - this.panY;
             }
         });
 
