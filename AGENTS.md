@@ -79,6 +79,21 @@ python -m http.server 8000
 When pushing branches or creating PRs, use `gh` CLI with `-R gentlewind-alt/ubiquitous-train`.
 Request `ask_permission` with `Action="custom"` when a `git` or `gh` command fails.
 
+### 2.5 Kimi AI Co-Pilot Assistance (`kimi_agent.py`)
+
+Kimi (`moonshotai/kimi-k3-free`) via TokenRouter (`https://api.tokenrouter.com/v1`) is configured to assist in coding and execute all 39 AGY skills.
+
+- **Script Location**: `C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py`
+- **Capabilities**: Armed with file tools (`read_file`, `write_file`), PowerShell command execution (`run_command`), and dynamic AGY skill instruction loading (`get_skill_instruction`).
+- **Usage**:
+  ```powershell
+  # Run Kimi with a prompt/skill
+  python C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py -p "Use ce-plan to outline a new tree traversal feature"
+
+  # Interactive coding assistant mode
+  python C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py
+  ```
+
 ---
 
 ## 3. Architecture Map
