@@ -92,7 +92,7 @@ body {
     gap: 16px;
 }
 
-.preset-selector, .speed-selector {
+.preset-selector, .speed-selector, .camera-selector {
     display: flex;
     align-items: center;
     gap: 8px;

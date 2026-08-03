@@ -58,6 +58,64 @@ root.left.right = Node(40)
 `
 };
 
+// --- GRAPH DIFF ENGINE (IU-2) ---
+class GraphDiffEngine {
+    static diff(prevObjects = [], currObjects = []) {
+        const prevMap = new Map(prevObjects.map(o => [o.id, o]));
+        const currMap = new Map(currObjects.map(o => [o.id, o]));
+        const mutations = [];
+
+        currObjects.forEach(curr => {
+            if (!prevMap.has(curr.id)) {
+                mutations.push({ type: "NodeAdded", targetId: curr.id, entity: curr });
+            } else {
+                const prev = prevMap.get(curr.id);
+                if (prev.label !== curr.label) {
+                    mutations.push({ type: "ValueChanged", targetId: curr.id, oldVal: prev.label, newVal: curr.label, entity: curr });
+                }
+            }
+        });
+
+        prevObjects.forEach(prev => {
+            if (!currMap.has(prev.id)) {
+                mutations.push({ type: "NodeRemoved", targetId: prev.id });
+            }
+        });
+
+        const extractEdges = (objs) => {
+            const edges = new Set();
+            objs.forEach(o => {
+                if (o.children && Array.isArray(o.children)) {
+                    o.children.forEach(cId => edges.add(`${o.id}->${cId}`));
+                }
+                if (o.left) edges.add(`${o.id}->${o.left}`);
+                if (o.right) edges.add(`${o.id}->${o.right}`);
+                if (o.next) edges.add(`${o.id}->${o.next}`);
+            });
+            return edges;
+        };
+
+        const prevEdges = extractEdges(prevObjects);
+        const currEdges = extractEdges(currObjects);
+
+        currEdges.forEach(edgeStr => {
+            if (!prevEdges.has(edgeStr)) {
+                const [parentId, childId] = edgeStr.split('->');
+                mutations.push({ type: "EdgeAdded", parentId, childId, targetId: childId });
+            }
+        });
+
+        prevEdges.forEach(edgeStr => {
+            if (!currEdges.has(edgeStr)) {
+                const [parentId, childId] = edgeStr.split('->');
+                mutations.push({ type: "EdgeRemoved", parentId, childId, targetId: childId });
+            }
+        });
+
+        return mutations;
+    }
+}
+
 class RVEApplication {
     constructor() {
         this.codeEditor = document.getElementById('code-editor');
@@ -68,6 +126,14 @@ class RVEApplication {
         
         this.algoSelect = document.getElementById('algorithm-select');
         this.speedSelect = document.getElementById('speed-select');
+        this.cameraSelect = document.getElementById('camera-mode-select');
+
+        this.cameraMode = "follow"; // "follow" | "fit" | "selected"
+        this.targetPanX = 0;
+        this.targetPanY = 0;
+        this.targetZoomScale = 1.0;
+        this.isUserDraggingCamera = false;
+        this.animProgress = 1.0;
         
         this.btnAutosaveToggle = document.getElementById('btn-autosave-toggle');
         this.btnSave = document.getElementById('btn-save');
@@ -148,6 +214,16 @@ class RVEApplication {
         this.btnAutosaveToggle.addEventListener('click', () => this.toggleAutoSave());
         this.btnCollapsePanel.addEventListener('click', () => this.toggleEditorPanel());
         this.btnExpandPanel.addEventListener('click', () => this.toggleEditorPanel());
+
+        if (this.cameraSelect) {
+            this.cameraSelect.addEventListener('change', (e) => {
+                this.cameraMode = e.target.value;
+                this.isUserDraggingCamera = false;
+                if (this.currentFrameIndex >= 0 && this.timelineFrames[this.currentFrameIndex]) {
+                    this.updateCameraTargetForFrame(this.timelineFrames[this.currentFrameIndex]);
+                }
+            });
+        }
 
         this.codeEditor.addEventListener('input', () => {
             this.updateLineNumbers();
@@ -428,6 +504,7 @@ class RVEApplication {
             if (this.isPanning) {
                 this.panX = e.clientX - this.startPanX;
                 this.panY = e.clientY - this.startPanY;
+                this.isUserDraggingCamera = true;
             }
         });
 
@@ -439,6 +516,7 @@ class RVEApplication {
 
         this.canvas.addEventListener('wheel', (e) => {
             e.preventDefault();
+            this.isUserDraggingCamera = true;
             const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
             const newScale = Math.min(Math.max(0.3, this.zoomScale * zoomFactor), 3.0);
             
@@ -614,12 +692,15 @@ class RVEApplication {
     }
 
     resetView() {
+        this.isUserDraggingCamera = false;
         this.zoomScale = 1.0;
         this.panX = 0;
         this.panY = 0;
         this.updateZoomCounter();
         this.pause();
-        this.seekToFrame(0);
+        if (this.timelineFrames.length > 0) {
+            this.seekToFrame(0);
+        }
         this.closeInspector();
     }
 
@@ -810,7 +891,7 @@ class RVEApplication {
         }
     }
 
-    // --- CPYTHON INTROSPECTION WITH AVL SEMANTICS & HEIGHT/BALANCE COMPUTATION ---
+    // --- CPYTHON INTROSPECTION WITH AVL SEMANTICS & LINE-BY-LINE TRACE SNAPSHOTS ---
     async executePyodide(userCode) {
         const runnerScript = `
 import sys
@@ -820,16 +901,7 @@ import json
 sys.stdout = io.StringIO()
 user_globals = {}
 exec_exception = None
-
-try:
-    exec("""${userCode.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}""", user_globals)
-except Exception as e:
-    exec_exception = str(e)
-
-stdout_output = sys.stdout.getvalue()
-
-objects = []
-seen_ids = set()
+line_snapshots = []
 IMMUTABLE_TYPES = {'int', 'float', 'str', 'bool', 'tuple', 'frozenset', 'bytes', 'NoneType'}
 
 def get_node_height(node):
@@ -841,175 +913,199 @@ def get_node_height(node):
     rh = get_node_height(getattr(node, 'right', None))
     return max(lh, rh) + 1
 
-def inspect_obj(obj, name=""):
-    if obj is None or id(obj) in seen_ids or callable(obj):
-        return None
-    cls_name = type(obj).__name__
-    if cls_name in ['int', 'str', 'float', 'bool', 'list', 'dict', 'set', 'tuple', 'frozenset', 'module', 'function', 'type']:
-        return None
+def capture_snapshot(line_no):
+    objects = []
+    seen_ids = set()
+
+    def inspect_obj(obj, name=""):
+        if obj is None or id(obj) in seen_ids or callable(obj):
+            return None
+        cls_name = type(obj).__name__
+        if cls_name in ['int', 'str', 'float', 'bool', 'list', 'dict', 'set', 'tuple', 'frozenset', 'module', 'function', 'type']:
+            return None
+            
+        seen_ids.add(id(obj))
+        val = getattr(obj, 'key', getattr(obj, 'data', getattr(obj, 'val', getattr(obj, 'value', getattr(obj, 'name', str(obj))))))
+        if callable(val):
+            val = str(obj)
+        next_obj = getattr(obj, 'next', None)
+        left_obj = getattr(obj, 'left', None)
+        right_obj = getattr(obj, 'right', None)
+        manager_obj = getattr(obj, 'manager', None)
         
-    seen_ids.add(id(obj))
-    val = getattr(obj, 'key', getattr(obj, 'data', getattr(obj, 'val', getattr(obj, 'value', getattr(obj, 'name', str(obj))))))
-    if callable(val):
-        val = str(obj)
-    next_obj = getattr(obj, 'next', None)
-    left_obj = getattr(obj, 'left', None)
-    right_obj = getattr(obj, 'right', None)
-    manager_obj = getattr(obj, 'manager', None)
-    
-    if callable(next_obj): next_obj = None
-    if callable(left_obj): left_obj = None
-    if callable(right_obj): right_obj = None
-    if callable(manager_obj): manager_obj = None
+        if callable(next_obj): next_obj = None
+        if callable(left_obj): left_obj = None
+        if callable(right_obj): right_obj = None
+        if callable(manager_obj): manager_obj = None
 
-    lh = get_node_height(left_obj)
-    rh = get_node_height(right_obj)
-    h_attr = getattr(obj, 'height', None)
-    h = int(h_attr) if isinstance(h_attr, (int, float)) else (max(lh, rh) + 1)
-    bf = int(lh - rh)
+        lh = get_node_height(left_obj)
+        rh = get_node_height(right_obj)
+        h_attr = getattr(obj, 'height', None)
+        h = int(h_attr) if isinstance(h_attr, (int, float)) else (max(lh, rh) + 1)
+        bf = int(lh - rh)
 
-    slots_data = []
-    child_objs_to_inspect = []
+        slots_data = []
+        child_objs_to_inspect = []
 
-    attrs = {}
-    if hasattr(obj, '__dict__'):
-        attrs.update(obj.__dict__)
-    elif hasattr(obj, '__slots__'):
-        for s in getattr(obj, '__slots__'):
-            if hasattr(obj, s):
-                attrs[s] = getattr(obj, s)
+        attrs = {}
+        if hasattr(obj, '__dict__'):
+            attrs.update(obj.__dict__)
+        elif hasattr(obj, '__slots__'):
+            for s in getattr(obj, '__slots__'):
+                if hasattr(obj, s):
+                    attrs[s] = getattr(obj, s)
 
-    for attr_name, attr_val in list(attrs.items())[:20]:
-        if attr_name.startswith('__') or callable(attr_val):
-            continue
-        if isinstance(attr_val, list):
-            list_refs = []
-            for item in attr_val:
-                if item is not None and not callable(item) and not isinstance(item, (int, float, str, bool, dict, tuple, set)):
-                    list_refs.append(f"py_0x{id(item):x}")
-                    child_objs_to_inspect.append((item, f"{name}.{attr_name}" if name else attr_name))
-            slots_data.append({
-                "attr": attr_name,
-                "ref": None,
-                "isList": True,
-                "listRefs": list_refs
-            })
-        elif attr_val is not None and not callable(attr_val) and not isinstance(attr_val, (int, float, str, bool, dict, tuple, set)):
-            slots_data.append({
-                "attr": attr_name,
-                "ref": f"py_0x{id(attr_val):x}",
-                "isList": False,
-                "listRefs": []
-            })
-            child_objs_to_inspect.append((attr_val, f"{name}.{attr_name}" if name else attr_name))
-        else:
-            slots_data.append({
-                "attr": attr_name,
-                "ref": None,
-                "scalar": str(attr_val) if attr_val is not None else None,
-                "isList": False,
-                "listRefs": []
-            })
+        for attr_name, attr_val in list(attrs.items())[:20]:
+            if attr_name.startswith('__') or callable(attr_val):
+                continue
+            if isinstance(attr_val, list):
+                list_refs = []
+                for item in attr_val:
+                    if item is not None and not callable(item) and not isinstance(item, (int, float, str, bool, dict, tuple, set)):
+                        list_refs.append(f"py_0x{id(item):x}")
+                        child_objs_to_inspect.append((item, f"{name}.{attr_name}" if name else attr_name))
+                slots_data.append({
+                    "attr": attr_name,
+                    "ref": None,
+                    "isList": True,
+                    "listRefs": list_refs
+                })
+            elif attr_val is not None and not callable(attr_val) and not isinstance(attr_val, (int, float, str, bool, dict, tuple, set)):
+                slots_data.append({
+                    "attr": attr_name,
+                    "ref": f"py_0x{id(attr_val):x}",
+                    "isList": False,
+                    "listRefs": []
+                })
+                child_objs_to_inspect.append((attr_val, f"{name}.{attr_name}" if name else attr_name))
+            else:
+                slots_data.append({
+                    "attr": attr_name,
+                    "ref": None,
+                    "scalar": str(attr_val) if attr_val is not None else None,
+                    "isList": False,
+                    "listRefs": []
+                })
 
-    obj_data = {
-        "id": f"py_0x{id(obj):x}",
-        "varName": name or cls_name,
-        "label": str(val),
-        "type": "TreeNode" if (left_obj or right_obj or 'Tree' in cls_name or hasattr(obj, 'key')) else "Node",
-        "pyType": cls_name,
-        "pyId": f"0x{id(obj):x}",
-        "height": h,
-        "balanceFactor": bf,
-        "isImmutable": cls_name in IMMUTABLE_TYPES,
-        "next": f"py_0x{id(next_obj):x}" if next_obj else None,
-        "left": f"py_0x{id(left_obj):x}" if left_obj else None,
-        "right": f"py_0x{id(right_obj):x}" if right_obj else None,
-        "manager": f"py_0x{id(manager_obj):x}" if manager_obj else None,
-        "slots": slots_data
-    }
-    objects.append(obj_data)
-    
-    if next_obj: inspect_obj(next_obj, f"{name}.next" if name else "")
-    if left_obj: inspect_obj(left_obj, f"{name}.left" if name else "")
-    if right_obj: inspect_obj(right_obj, f"{name}.right" if name else "")
-    for child_item, child_name in child_objs_to_inspect:
-        inspect_obj(child_item, child_name)
-
-    return obj_data["id"]
-
-for k, v in list(user_globals.items()):
-    if not k.startswith('__') and not callable(v) and not isinstance(v, type):
-        cls_name = type(v).__name__
-        is_immut = cls_name in IMMUTABLE_TYPES
+        obj_data = {
+            "id": f"py_0x{id(obj):x}",
+            "varName": name or cls_name,
+            "label": str(val),
+            "type": "TreeNode" if (left_obj or right_obj or 'Tree' in cls_name or hasattr(obj, 'key')) else "Node",
+            "pyType": cls_name,
+            "pyId": f"0x{id(obj):x}",
+            "height": h,
+            "balanceFactor": bf,
+            "isImmutable": cls_name in IMMUTABLE_TYPES,
+            "next": f"py_0x{id(next_obj):x}" if next_obj else None,
+            "left": f"py_0x{id(left_obj):x}" if left_obj else None,
+            "right": f"py_0x{id(right_obj):x}" if right_obj else None,
+            "manager": f"py_0x{id(manager_obj):x}" if manager_obj else None,
+            "slots": slots_data
+        }
+        objects.append(obj_data)
         
-        if isinstance(v, (int, float, str, bool)) or v is None:
-            objects.append({
-                "id": f"prim_{k}",
-                "varName": k,
-                "label": f"{k} = {repr(v)}",
-                "type": "Primitive",
-                "pyType": cls_name,
-                "pyId": f"0x{id(v):x}",
-                "isImmutable": True,
-                "color": "#F59E0B"
-            })
-        elif isinstance(v, tuple):
-            for idx, item in enumerate(v[:50]):
+        if next_obj: inspect_obj(next_obj, f"{name}.next" if name else "")
+        if left_obj: inspect_obj(left_obj, f"{name}.left" if name else "")
+        if right_obj: inspect_obj(right_obj, f"{name}.right" if name else "")
+        for child_item, child_name in child_objs_to_inspect:
+            inspect_obj(child_item, child_name)
+
+        return obj_data["id"]
+
+    for k, v in list(user_globals.items()):
+        if not k.startswith('__') and not callable(v) and not isinstance(v, type):
+            cls_name = type(v).__name__
+            is_immut = cls_name in IMMUTABLE_TYPES
+            
+            if isinstance(v, (int, float, str, bool)) or v is None:
                 objects.append({
-                    "id": f"tup_{k}_{idx}",
-                    "varName": f"{k}[{idx}]",
-                    "label": str(item),
-                    "type": "DictBucket",
-                    "pyType": "tuple",
+                    "id": f"prim_{k}",
+                    "varName": k,
+                    "label": f"{k} = {repr(v)}",
+                    "type": "Primitive",
+                    "pyType": cls_name,
                     "pyId": f"0x{id(v):x}",
                     "isImmutable": True,
-                    "color": "#8B5CF6"
+                    "color": "#F59E0B"
                 })
-        elif isinstance(v, list):
-            for idx, item in enumerate(v[:50]):
-                objects.append({
-                    "id": f"arr_{k}_{idx}",
-                    "varName": f"{k}[{idx}]",
-                    "label": str(item),
-                    "type": "ArrayCell",
-                    "pyType": "list",
-                    "pyId": f"0x{id(v):x}",
-                    "isImmutable": False,
-                    "color": "#6366F1"
-                })
-        elif isinstance(v, set):
-            for idx, item in enumerate(sorted(list(v))[:50]):
-                objects.append({
-                    "id": f"set_{k}_{idx}",
-                    "varName": f"{k}{{{item}}}",
-                    "label": str(item),
-                    "type": "DictBucket",
-                    "pyType": "set",
-                    "pyId": f"0x{id(v):x}",
-                    "isImmutable": False,
-                    "color": "#10B981"
-                })
-        elif isinstance(v, dict):
-            idx = 0
-            for dk, dv in list(v.items())[:20]:
-                objects.append({
-                    "id": f"dict_{k}_{idx}",
-                    "varName": f"{k}['{dk}']",
-                    "label": f"{dk}: {dv}",
-                    "type": "DictBucket",
-                    "pyType": "dict",
-                    "pyId": f"0x{id(v):x}",
-                    "isImmutable": False,
-                    "color": "#EC4899"
-                })
-                idx += 1
-        else:
-            head = getattr(v, 'root', getattr(v, 'head', v))
-            inspect_obj(head, k)
+            elif isinstance(v, tuple):
+                for idx, item in enumerate(v[:50]):
+                    objects.append({
+                        "id": f"tup_{k}_{idx}",
+                        "varName": f"{k}[{idx}]",
+                        "label": str(item),
+                        "type": "DictBucket",
+                        "pyType": "tuple",
+                        "pyId": f"0x{id(v):x}",
+                        "isImmutable": True,
+                        "color": "#8B5CF6"
+                    })
+            elif isinstance(v, list):
+                for idx, item in enumerate(v[:50]):
+                    objects.append({
+                        "id": f"arr_{k}_{idx}",
+                        "varName": f"{k}[{idx}]",
+                        "label": str(item),
+                        "type": "ArrayCell",
+                        "pyType": "list",
+                        "pyId": f"0x{id(v):x}",
+                        "isImmutable": False,
+                        "color": "#6366F1"
+                    })
+            elif isinstance(v, set):
+                for idx, item in enumerate(sorted(list(v))[:50]):
+                    objects.append({
+                        "id": f"set_{k}_{idx}",
+                        "varName": f"{k}{{{item}}}",
+                        "label": str(item),
+                        "type": "DictBucket",
+                        "pyType": "set",
+                        "pyId": f"0x{id(v):x}",
+                        "isImmutable": False,
+                        "color": "#10B981"
+                    })
+            elif isinstance(v, dict):
+                idx = 0
+                for dk, dv in list(v.items())[:20]:
+                    objects.append({
+                        "id": f"dict_{k}_{idx}",
+                        "varName": f"{k}['{dk}']",
+                        "label": f"{dk}: {dv}",
+                        "type": "DictBucket",
+                        "pyType": "dict",
+                        "pyId": f"0x{id(v):x}",
+                        "isImmutable": False,
+                        "color": "#EC4899"
+                    })
+                    idx += 1
+            else:
+                head = getattr(v, 'root', getattr(v, 'head', v))
+                inspect_obj(head, k)
+
+    line_snapshots.append({
+        "line": line_no,
+        "objects": objects
+    })
+
+def trace_func(frame, event, arg):
+    if event == 'line':
+        capture_snapshot(frame.f_lineno)
+    return trace_func
+
+sys.settrace(trace_func)
+try:
+    exec("""${userCode.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}""", user_globals)
+except Exception as e:
+    exec_exception = str(e)
+finally:
+    sys.settrace(None)
+
+stdout_output = sys.stdout.getvalue()
 
 json.dumps({
     "stdout": stdout_output,
-    "objects": objects,
+    "snapshots": line_snapshots,
     "error": exec_exception
 })
 `;
@@ -1022,91 +1118,136 @@ json.dumps({
         }
 
         if (res.error) {
-            this.printTerminal(`[Rule Conflict / Exception] ${res.error}`, "output");
+            this.printTerminal(`[Runtime Exception] ${res.error}`, "output");
             this.actionBanner.classList.add('error-alert');
             this.actionLineBadge.innerText = "⚠️ Error";
-            this.actionDescription.innerText = `Rule Conflict: ${res.error}`;
-            this.highlightLine(this.lastCompiledLineCount, true);
+            this.actionDescription.innerText = `Exception: ${res.error}`;
         } else {
             this.actionBanner.classList.remove('error-alert');
         }
 
-        return this.compileCodeToTimeline(userCode, res.objects);
+        return this.compileCodeToTimeline(userCode, res.snapshots);
     }
 
     compileCodeFallback(code) {
         return this.compileCodeToTimeline(code);
     }
 
-    compileCodeToTimeline(code, wasmObjects = null) {
+    // --- OPERATION DETECTOR (IU-3) ---
+    detectSemanticEvent(mutations, lineCode) {
+        if (!mutations || mutations.length === 0) {
+            return { type: "Step", targetId: null, animationType: "None", description: lineCode || "Executing step..." };
+        }
+
+        const edgeAdded = mutations.find(m => m.type === "EdgeAdded");
+        const edgeRemoved = mutations.find(m => m.type === "EdgeRemoved");
+        const valChanged = mutations.find(m => m.type === "ValueChanged");
+        const nodeAdded = mutations.find(m => m.type === "NodeAdded");
+
+        if (edgeAdded) {
+            return {
+                type: "AppendChild",
+                parentId: edgeAdded.parentId,
+                targetId: edgeAdded.childId,
+                cameraFocusId: edgeAdded.parentId,
+                animationType: "SlideIn",
+                description: lineCode ? `Executed: ${lineCode}` : `Appended child to ${edgeAdded.parentId}`
+            };
+        } else if (edgeRemoved) {
+            return {
+                type: "RemoveChild",
+                parentId: edgeRemoved.parentId,
+                targetId: edgeRemoved.childId,
+                cameraFocusId: edgeRemoved.parentId,
+                animationType: "FadeOut",
+                description: lineCode ? `Executed: ${lineCode}` : `Removed child from ${edgeRemoved.parentId}`
+            };
+        } else if (valChanged) {
+            return {
+                type: "UpdateValue",
+                targetId: valChanged.targetId,
+                cameraFocusId: valChanged.targetId,
+                animationType: "Pulse",
+                description: lineCode ? `Executed: ${lineCode}` : `Updated value to ${valChanged.newVal}`
+            };
+        } else if (nodeAdded) {
+            return {
+                type: "CreateNode",
+                targetId: nodeAdded.targetId,
+                cameraFocusId: nodeAdded.targetId,
+                animationType: "SlideIn",
+                description: lineCode ? `Executed: ${lineCode}` : `Created node ${nodeAdded.targetId}`
+            };
+        }
+
+        return {
+            type: "Step",
+            targetId: mutations[0]?.targetId || null,
+            cameraFocusId: mutations[0]?.targetId || null,
+            animationType: "Pulse",
+            description: lineCode || "Executing step..."
+        };
+    }
+
+    compileCodeToTimeline(code, snapshots = null) {
         const lines = code.split('\n');
         const frames = [];
         let timestamp = 1000;
+        let prevEntities = [];
 
-        const objects = new Map();
-        let inClassDef = false;
+        if (snapshots && snapshots.length > 0) {
+            snapshots.forEach((snap) => {
+                const lineNo = snap.line;
+                const lineCode = lines[lineNo - 1] ? lines[lineNo - 1].trim() : `Line ${lineNo}`;
+                if (!lineCode || lineCode.startsWith('#')) return;
 
-        lines.forEach((line, lineIndex) => {
-            const lineNo = lineIndex + 1;
-            const cleanLine = line.trim();
-            if (!cleanLine || cleanLine.startsWith('#')) return;
+                const currentEntities = this.solveLayoutConstraintsForObjects(snap.objects);
+                const mutations = GraphDiffEngine.diff(prevEntities, currentEntities);
+                const event = this.detectSemanticEvent(mutations, lineCode);
 
-            if (cleanLine.startsWith('class ') || cleanLine.startsWith('def ')) {
-                inClassDef = true;
-                return;
-            }
-            if (inClassDef && (line.startsWith('    ') || line.startsWith('\t'))) {
-                return;
-            }
-            if (inClassDef && !line.startsWith(' ') && !line.startsWith('\t')) {
-                inClassDef = false;
-            }
+                frames.push({
+                    timestamp: timestamp += 50,
+                    lineNumber: lineNo,
+                    lineCode: lineCode,
+                    description: event.description,
+                    entities: currentEntities,
+                    mutations: mutations,
+                    event: event
+                });
+                prevEntities = currentEntities;
+            });
+        } else {
+            let accumulatedObjects = [];
+            lines.forEach((line, lineIndex) => {
+                const lineNo = lineIndex + 1;
+                const cleanLine = line.trim();
+                if (!cleanLine || cleanLine.startsWith('#') || cleanLine.startsWith('class ') || cleanLine.startsWith('def ')) return;
 
-            let changed = false;
-            let actionDesc = `Executed line ${lineNo}: ${cleanLine}`;
+                const currentEntities = this.solveLayoutConstraintsForObjects(accumulatedObjects);
+                const mutations = GraphDiffEngine.diff(prevEntities, currentEntities);
+                const event = this.detectSemanticEvent(mutations, cleanLine);
 
-            if (cleanLine.includes('rotate_left') || cleanLine.includes('rotate_right')) {
-                actionDesc = `AVL Rotation: ${cleanLine}`;
-                changed = true;
-            } else if (cleanLine.includes('insert(')) {
-                actionDesc = `AVL Insert Operation: ${cleanLine}`;
-                changed = true;
-            } else if (cleanLine.includes('delete(')) {
-                actionDesc = `AVL Delete Operation: ${cleanLine}`;
-                changed = true;
-            } else if (cleanLine.startsWith('if ') || cleanLine.startsWith('elif ') || cleanLine.startsWith('while ')) {
-                actionDesc = `Evaluating Condition: ${cleanLine}`;
-                changed = true;
-            } else if (cleanLine.startsWith('print(')) {
-                actionDesc = `Output: ${cleanLine}`;
-                changed = true;
-            }
-
-            let currentEntities = [];
-            if (wasmObjects && wasmObjects.length > 0) {
-                currentEntities = this.solveLayoutConstraintsForObjects(wasmObjects);
-                changed = true;
-            } else {
-                currentEntities = this.solveLayoutConstraintsForObjects(Array.from(objects.values()));
-            }
-
-            if (changed) {
                 frames.push({
                     timestamp: timestamp += 50,
                     lineNumber: lineNo,
                     lineCode: cleanLine,
-                    description: actionDesc,
-                    entities: currentEntities
+                    description: event.description,
+                    entities: currentEntities,
+                    mutations: mutations,
+                    event: event
                 });
-            }
-        });
+                prevEntities = currentEntities;
+            });
+        }
 
         return frames.length > 0 ? frames : [{
             timestamp: 1000,
             lineNumber: 1,
             lineCode: "",
             description: "Initial Execution State",
-            entities: []
+            entities: [],
+            mutations: [],
+            event: { type: "Step", description: "Initial State" }
         }];
     }
 
@@ -1493,6 +1634,53 @@ json.dumps({
         return activeObjects;
     }
 
+    // --- CAMERA TRACKING ENGINE (IU-4) ---
+    updateCameraTargetForFrame(frame) {
+        if (!frame || this.isUserDraggingCamera) return;
+
+        if (this.cameraMode === "follow") {
+            const focusId = frame.event?.cameraFocusId || frame.event?.targetId;
+            if (focusId && this.entities.has(focusId)) {
+                const targetNode = this.entities.get(focusId);
+                this.targetPanX = (this.canvas.width / 2) - targetNode.x * this.zoomScale;
+                this.targetPanY = (this.canvas.height / 2) - targetNode.y * this.zoomScale;
+            } else if (this.entities.size > 0) {
+                // Focus on root or first entity if no specific focus node
+                const firstNode = Array.from(this.entities.values())[0];
+                this.targetPanX = (this.canvas.width / 2) - firstNode.x * this.zoomScale;
+                this.targetPanY = (this.canvas.height / 2) - firstNode.y * this.zoomScale;
+            }
+        } else if (this.cameraMode === "fit") {
+            if (this.entities.size === 0) return;
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            this.entities.forEach(e => {
+                if (e.x < minX) minX = e.x;
+                if (e.x > maxX) maxX = e.x;
+                if (e.y < minY) minY = e.y;
+                if (e.y > maxY) maxY = e.y;
+            });
+            const boundsWidth = (maxX - minX) || 400;
+            const boundsHeight = (maxY - minY) || 300;
+            const padding = 140;
+            const scaleX = (this.canvas.width - padding) / boundsWidth;
+            const scaleY = (this.canvas.height - padding) / boundsHeight;
+            const fitScale = Math.max(0.4, Math.min(1.1, Math.min(scaleX, scaleY)));
+
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            this.targetZoomScale = fitScale;
+            this.targetPanX = (this.canvas.width / 2) - centerX * fitScale;
+            this.targetPanY = (this.canvas.height / 2) - centerY * fitScale;
+        } else if (this.cameraMode === "selected") {
+            if (this.selectedEntityId && this.entities.has(this.selectedEntityId)) {
+                const selectedNode = this.entities.get(this.selectedEntityId);
+                this.targetPanX = (this.canvas.width / 2) - selectedNode.x * this.zoomScale;
+                this.targetPanY = (this.canvas.height / 2) - selectedNode.y * this.zoomScale;
+            }
+        }
+    }
+
     seekToFrame(frameIndex) {
         if (frameIndex < 0 || frameIndex >= this.timelineFrames.length) return;
         this.currentFrameIndex = frameIndex;
@@ -1518,6 +1706,12 @@ json.dumps({
         if (this.selectedEntityId && this.entities.has(this.selectedEntityId)) {
             this.showInspector(this.entities.get(this.selectedEntityId));
         }
+
+        // Camera Auto-Tracking Target Update
+        this.updateCameraTargetForFrame(frame);
+
+        // Reset animation progress for smooth transitions
+        this.animProgress = 0.0;
     }
 
     step(direction) {
@@ -1528,6 +1722,18 @@ json.dumps({
     startRenderLoop() {
         const render = () => {
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+            // Smooth Lerp Camera
+            if (!this.isUserDraggingCamera) {
+                this.panX += (this.targetPanX - this.panX) * 0.12;
+                this.panY += (this.targetPanY - this.panY) * 0.12;
+                this.zoomScale += (this.targetZoomScale - this.zoomScale) * 0.12;
+            }
+
+            // Lerp Micro-Animation Progress
+            if (this.animProgress < 1.0) {
+                this.animProgress = Math.min(1.0, this.animProgress + 0.08);
+            }
 
             this.ctx.save();
             this.ctx.translate(this.panX, this.panY);
