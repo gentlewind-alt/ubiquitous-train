@@ -540,8 +540,9 @@ select:focus {
     position: absolute;
     top: 14px;
     left: 14px;
-    right: 14px;
-    background: rgba(18, 24, 38, 0.85);
+    right: auto;
+    max-width: 55%;
+    background: rgba(18, 24, 38, 0.88);
     backdrop-filter: blur(12px);
     border: 1px solid var(--border-color);
     padding: 8px 14px;
@@ -550,9 +551,10 @@ select:focus {
     display: flex;
     align-items: center;
     gap: 10px;
-    z-index: 5;
+    z-index: 15;
+    pointer-events: none;
     transition: all 0.2s ease;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
 }
 
 .action-banner.error-alert {
@@ -570,6 +572,7 @@ select:focus {
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.2px;
+    pointer-events: auto;
 }
 
 .action-banner.error-alert .action-badge {
@@ -590,16 +593,18 @@ select:focus {
 /* DEVTOOLS INSPECTOR OVERLAY */
 .inspector-overlay {
     position: absolute;
-    top: 60px;
-    right: 16px;
-    width: 290px;
+    top: 14px;
+    right: 14px;
+    width: 280px;
+    max-height: calc(100% - 28px);
     background: rgba(18, 24, 38, 0.95);
     backdrop-filter: blur(14px);
     border: 1px solid var(--border-color);
     border-radius: 10px;
     display: none;
     flex-direction: column;
-    z-index: 10;
+    z-index: 20;
+    overflow: hidden;
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
 }
 
@@ -689,16 +694,19 @@ select:focus {
 /* DOCKED LOCAL VARIABLES PANEL */
 .variables-dock {
     position: absolute;
-    bottom: 16px;
-    left: 16px;
+    bottom: 14px;
+    left: 14px;
     background: rgba(18, 24, 38, 0.88);
-    backdrop-filter: blur(8px);
+    backdrop-filter: blur(10px);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 10px 14px;
     max-width: 280px;
-    z-index: 10;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    max-height: 180px;
+    overflow-y: auto;
+    z-index: 15;
+    pointer-events: none;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
 
 .variables-dock-title {
