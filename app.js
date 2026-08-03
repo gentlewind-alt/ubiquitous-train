@@ -982,15 +982,22 @@ def capture_snapshot(line_no):
                 continue
             if isinstance(attr_val, list):
                 list_refs = []
-                for item in attr_val:
+                list_items = []
+                for idx, item in enumerate(attr_val[:20]):
                     if item is not None and not callable(item) and not isinstance(item, (int, float, str, bool, dict, tuple, set)):
-                        list_refs.append(f"py_0x{id(item):x}")
-                        child_objs_to_inspect.append((item, f"{name}.{attr_name}" if name else attr_name))
+                        ref_id = f"py_0x{id(item):x}"
+                        list_refs.append(ref_id)
+                        item_label = str(getattr(item, 'name', getattr(item, 'title', getattr(item, 'val', getattr(item, 'key', 'ref')))))
+                        list_items.append({"index": idx, "ref": ref_id, "label": item_label})
+                        child_objs_to_inspect.append((item, f"{name}.{attr_name}[{idx}]" if name else f"{attr_name}[{idx}]"))
+                    else:
+                        list_items.append({"index": idx, "ref": None, "label": str(item)})
                 slots_data.append({
                     "attr": attr_name,
                     "ref": None,
                     "isList": True,
-                    "listRefs": list_refs
+                    "listRefs": list_refs,
+                    "items": list_items
                 })
             elif attr_val is not None and not callable(attr_val) and not isinstance(attr_val, (int, float, str, bool, dict, tuple, set)):
                 slots_data.append({
@@ -1770,14 +1777,27 @@ json.dumps({
 
                 classGroups.forEach((cObjects, cType) => {
                     let colY = currentY;
-                    const colX = 300 + colIndex * 300;
+                    const colX = 320 + colIndex * 320;
                     
                     cObjects.forEach(obj => {
-                        const slotsCount = (obj.slots ? obj.slots.length : 1);
-                        const h = 30 + slotsCount * 26;
-                        obj.x = colX + 100;
+                        let slotsH = 0;
+                        if (obj.slots && Array.isArray(obj.slots)) {
+                            obj.slots.forEach(s => {
+                                if (s.isList && s.items && s.items.length > 0) {
+                                    slotsH += 22 + s.items.length * 24;
+                                } else if (s.isList && s.listRefs && s.listRefs.length > 0) {
+                                    slotsH += 22 + s.listRefs.length * 24;
+                                } else {
+                                    slotsH += 26;
+                                }
+                            });
+                        } else {
+                            slotsH = 26;
+                        }
+                        const h = 30 + Math.max(26, slotsH);
+                        obj.x = colX + 105;
                         obj.y = colY + h / 2;
-                        obj.width = 200;
+                        obj.width = 210;
                         obj.height = h;
                         
                         const vRef = activeObjects.find(o => o.type === "VariableRef" && o.targetId === obj.id);
@@ -1789,7 +1809,7 @@ json.dumps({
                             vRef.y = obj.y;
                         }
                         
-                        colY += h + 30;
+                        colY += h + 35;
                     });
                     if (colY > maxColY) maxColY = colY;
                     colIndex++;
@@ -1991,9 +2011,21 @@ json.dumps({
         }
 
         this.entities.clear();
+        
+        const lineText = (this.editor && this.editor.getModel() && frame.lineNumber) 
+            ? (this.editor.getModel().getLineContent(frame.lineNumber) || "") 
+            : "";
+            
+        let hasActive = false;
         frame.entities.forEach(e => {
-            this.entities.set(e.id, { ...e });
+            const entity = { ...e };
+            const vName = entity.varName || entity.label || "";
+            const isMentioned = Boolean(vName && lineText.length > 0 && lineText.includes(vName));
+            entity.isActive = isMentioned;
+            if (isMentioned) hasActive = true;
+            this.entities.set(e.id, entity);
         });
+        this.hasActiveHighlighting = hasActive;
         
         this.entityCounter.innerText = this.entities.size;
         
@@ -2112,42 +2144,68 @@ json.dumps({
                 const rectW = entity.width || 60;
                 const startX = entity.x + rectW / 2;
                 const startY = entity.y;
-                
-                const endX = target.x - 80;
+                const targetW = target.width || 200;
+                const endX = target.x - targetW / 2;
                 const endY = target.y;
                 
-                this.ctx.strokeStyle = "#60A5FA";
-                this.ctx.lineWidth = 2.2;
-                this.drawArrow(startX, startY, endX, endY, "#60A5FA");
+                const isEdgeActive = entity.isActive || target.isActive;
+                this.ctx.save();
+                if (this.hasActiveHighlighting && !isEdgeActive) {
+                    this.ctx.globalAlpha = 0.25;
+                }
+                
+                const edgeColor = isEdgeActive ? "#F59E0B" : "#60A5FA";
+                this.ctx.strokeStyle = edgeColor;
+                this.ctx.lineWidth = isEdgeActive ? 2.6 : 2.0;
+                
+                // Animated growing arrow
+                const curEndX = startX + (endX - startX) * this.animProgress;
+                const curEndY = startY + (endY - startY) * this.animProgress;
+                this.drawArrow(startX, startY, curEndX, curEndY, edgeColor);
+                this.ctx.restore();
             }
             if (entity.refAnchors && typeof entity.refAnchors === "object") {
                 Object.entries(entity.refAnchors).forEach(([targetId, anchor]) => {
                     if (this.entities.has(targetId)) {
                         const target = this.entities.get(targetId);
-                        const targetW = target.width || 180;
+                        const targetW = target.width || 200;
                         const startX = anchor.x;
                         const startY = anchor.y;
                         const endX = target.x - targetW / 2;
                         const endY = target.y;
                         
-                        const edgeColor = entity.type === "DictContainer" ? "#EC4899" : "#6366F1";
+                        const isEdgeActive = entity.isActive || target.isActive;
+                        this.ctx.save();
+                        if (this.hasActiveHighlighting && !isEdgeActive) {
+                            this.ctx.globalAlpha = 0.25;
+                        }
+                        
+                        const edgeColor = isEdgeActive ? "#F59E0B" : (anchor.color || "#10B981");
                         this.ctx.strokeStyle = edgeColor;
-                        this.ctx.lineWidth = 2.0;
+                        this.ctx.lineWidth = isEdgeActive ? 2.6 : 2.0;
+                        
+                        // Bezier curve interpolated with animProgress
+                        const animEndX = startX + (endX - startX) * this.animProgress;
+                        const animEndY = startY + (endY - startY) * this.animProgress;
                         
                         this.ctx.beginPath();
                         this.ctx.moveTo(startX, startY);
-                        const cp1x = startX + (endX - startX) * 0.4;
-                        const cp2x = startX + (endX - startX) * 0.6;
-                        this.ctx.bezierCurveTo(cp1x, startY, cp2x, endY, endX, endY);
+                        const cp1x = startX + (animEndX - startX) * 0.4;
+                        const cp2x = startX + (animEndX - startX) * 0.6;
+                        this.ctx.bezierCurveTo(cp1x, startY, cp2x, animEndY, animEndX, animEndY);
                         this.ctx.stroke();
                         
-                        const headlen = 7;
-                        this.ctx.beginPath();
-                        this.ctx.moveTo(endX, endY);
-                        this.ctx.lineTo(endX - headlen, endY - 4);
-                        this.ctx.lineTo(endX - headlen, endY + 4);
-                        this.ctx.fillStyle = edgeColor;
-                        this.ctx.fill();
+                        if (this.animProgress > 0.4) {
+                            const headlen = 7;
+                            this.ctx.beginPath();
+                            this.ctx.moveTo(animEndX, animEndY);
+                            this.ctx.lineTo(animEndX - headlen, animEndY - 4);
+                            this.ctx.lineTo(animEndX - headlen, animEndY + 4);
+                            this.ctx.fillStyle = edgeColor;
+                            this.ctx.fill();
+                        }
+                        
+                        this.ctx.restore();
                     }
                 });
             }
@@ -2549,29 +2607,52 @@ json.dumps({
                 this.ctx.restore();
             } else if (entity.type === "ClassObject") {
                 const slots = entity.slots || [];
-                const rowH = 26;
                 const headerH = 30;
-                const totalH = headerH + Math.max(1, slots.length) * rowH;
-                const width = entity.width || 200;
+                
+                let totalH = headerH;
+                slots.forEach(s => {
+                    if (s.isList && s.items && s.items.length > 0) {
+                        totalH += 22 + s.items.length * 24;
+                    } else if (s.isList && s.listRefs && s.listRefs.length > 0) {
+                        totalH += 22 + s.listRefs.length * 24;
+                    } else {
+                        totalH += 26;
+                    }
+                });
+                totalH = Math.max(56, totalH);
+                const width = entity.width || 210;
                 
                 const startX = renderX - width / 2;
                 const startY = renderY - totalH / 2;
                 
                 this.ctx.save();
                 
+                if (this.hasActiveHighlighting) {
+                    this.ctx.globalAlpha = entity.isActive ? 1.0 : 0.25;
+                }
+                
                 const isStudent = (entity.pyType || "").toLowerCase().includes("student");
                 const isCourse = (entity.pyType || "").toLowerCase().includes("course");
                 const headerBg = isStudent ? "rgba(99, 102, 241, 0.25)" : (isCourse ? "rgba(16, 185, 129, 0.25)" : "rgba(236, 72, 153, 0.25)");
                 const headerColor = isStudent ? "#818CF8" : (isCourse ? "#34D399" : "#F472B6");
-                const strokeColor = isSelected ? "#FFFFFF" : (isStudent ? "#6366F1" : (isCourse ? "#10B981" : "#EC4899"));
+                let strokeColor = isSelected ? "#FFFFFF" : (isStudent ? "#6366F1" : (isCourse ? "#10B981" : "#EC4899"));
+                if (entity.isActive) strokeColor = "#F59E0B";
+                
                 const icon = isStudent ? "🎓" : (isCourse ? "📚" : "📦");
                 
-                this.ctx.fillStyle = "rgba(18, 24, 38, 0.92)";
+                if (entity.isActive) {
+                    this.ctx.fillStyle = "rgba(245, 158, 11, 0.15)";
+                    this.ctx.beginPath();
+                    this.ctx.roundRect(startX - 4, startY - 4, width + 8, totalH + 8, 12);
+                    this.ctx.fill();
+                }
+                
+                this.ctx.fillStyle = "rgba(18, 24, 38, 0.94)";
                 this.ctx.beginPath();
                 this.ctx.roundRect(startX, startY, width, totalH, 8);
                 this.ctx.fill();
                 this.ctx.strokeStyle = strokeColor;
-                this.ctx.lineWidth = isSelected ? 2.5 : 1.8;
+                this.ctx.lineWidth = entity.isActive ? 2.5 : (isSelected ? 2.2 : 1.6);
                 this.ctx.stroke();
                 
                 this.ctx.fillStyle = headerBg;
@@ -2584,7 +2665,7 @@ json.dumps({
                 this.ctx.textAlign = "center";
                 this.ctx.textBaseline = "middle";
                 const classTitle = `${icon} ${entity.pyType}: ${entity.label}`;
-                this.ctx.fillText(classTitle.length > 24 ? classTitle.substring(0, 22) + ".." : classTitle, startX + width / 2, startY + headerH / 2);
+                this.ctx.fillText(classTitle.length > 25 ? classTitle.substring(0, 23) + ".." : classTitle, startX + width / 2, startY + headerH / 2);
                 
                 this.ctx.beginPath();
                 this.ctx.moveTo(startX, startY + headerH);
@@ -2593,77 +2674,116 @@ json.dumps({
                 this.ctx.lineWidth = 1;
                 this.ctx.stroke();
                 
-                const colDividerX = startX + 75;
-                this.ctx.beginPath();
-                this.ctx.moveTo(colDividerX, startY + headerH);
-                this.ctx.lineTo(colDividerX, startY + totalH);
-                this.ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-                this.ctx.stroke();
-                
                 entity.refAnchors = {};
+                let currentSlotY = startY + headerH;
                 
                 slots.forEach((slot, idx) => {
-                    const rowY = startY + headerH + idx * rowH;
                     const attrName = String(slot.attr || "");
                     
-                    this.ctx.fillStyle = "#94A3B8";
-                    this.ctx.font = "600 10px Fira Code, monospace";
-                    this.ctx.textAlign = "center";
-                    this.ctx.textBaseline = "middle";
-                    const truncAttr = attrName.length > 9 ? attrName.substring(0, 8) + ".." : attrName;
-                    this.ctx.fillText(truncAttr, startX + 37, rowY + rowH / 2);
-                    
-                    const anchorY = rowY + rowH / 2;
-                    if (slot.isList && slot.listRefs && slot.listRefs.length > 0) {
-                        const anchorX = startX + width;
-                        slot.listRefs.forEach(refId => {
-                            entity.refAnchors[refId] = { x: anchorX, y: anchorY };
+                    if (slot.isList && ((slot.items && slot.items.length > 0) || (slot.listRefs && slot.listRefs.length > 0))) {
+                        const itemsList = slot.items || (slot.listRefs || []).map((r, i) => ({ index: i, ref: r, label: "ref" }));
+                        const listHeaderH = 22;
+                        
+                        this.ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+                        this.ctx.fillRect(startX, currentSlotY, width, listHeaderH);
+                        
+                        this.ctx.fillStyle = "#94A3B8";
+                        this.ctx.font = "700 10px Fira Code, monospace";
+                        this.ctx.textAlign = "left";
+                        this.ctx.textBaseline = "middle";
+                        this.ctx.fillText(`▪ ${attrName} [${itemsList.length}]`, startX + 10, currentSlotY + listHeaderH / 2);
+                        
+                        currentSlotY += listHeaderH;
+                        
+                        itemsList.forEach((item, itemIdx) => {
+                            const subRowY = currentSlotY;
+                            const subRowH = 24;
+                            
+                            this.ctx.fillStyle = "#CBD5E1";
+                            this.ctx.font = "600 10px Fira Code, monospace";
+                            this.ctx.textAlign = "center";
+                            this.ctx.textBaseline = "middle";
+                            this.ctx.fillText(`[${item.index}]`, startX + 25, subRowY + subRowH / 2);
+                            
+                            const anchorX = startX + width;
+                            const anchorY = subRowY + subRowH / 2;
+                            
+                            if (item.ref) {
+                                entity.refAnchors[item.ref] = { x: anchorX, y: anchorY, index: item.index, color: headerColor };
+                                
+                                this.ctx.beginPath();
+                                this.ctx.arc(startX + 50, anchorY, 4, 0, Math.PI * 2);
+                                this.ctx.fillStyle = headerColor;
+                                this.ctx.fill();
+                                this.ctx.strokeStyle = "#FFFFFF";
+                                this.ctx.lineWidth = 1;
+                                this.ctx.stroke();
+                                
+                                this.ctx.fillStyle = "#E2E8F0";
+                                this.ctx.font = "500 10px Fira Code, monospace";
+                                this.ctx.textAlign = "left";
+                                const lbl = item.label || "ref";
+                                this.ctx.fillText(`──► ${lbl}`, startX + 60, anchorY);
+                            } else {
+                                this.ctx.fillStyle = "#94A3B8";
+                                this.ctx.font = "500 10px Fira Code, monospace";
+                                this.ctx.textAlign = "left";
+                                this.ctx.fillText(String(item.label || ""), startX + 50, anchorY);
+                            }
+                            
+                            this.ctx.beginPath();
+                            this.ctx.moveTo(startX + 10, subRowY + subRowH);
+                            this.ctx.lineTo(startX + width - 10, subRowY + subRowH);
+                            this.ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+                            this.ctx.stroke();
+                            
+                            currentSlotY += subRowH;
                         });
-                        
-                        this.ctx.beginPath();
-                        this.ctx.arc(startX + 125, anchorY, 4, 0, Math.PI * 2);
-                        this.ctx.fillStyle = headerColor;
-                        this.ctx.fill();
-                        this.ctx.strokeStyle = "#FFFFFF";
-                        this.ctx.lineWidth = 1;
-                        this.ctx.stroke();
-                        
-                        this.ctx.fillStyle = "#CBD5E1";
-                        this.ctx.font = "500 10px Fira Code, monospace";
-                        this.ctx.textAlign = "left";
-                        this.ctx.fillText(`[${slot.listRefs.length}] ➜`, startX + 82, anchorY);
-                    } else if (slot.ref) {
-                        const anchorX = startX + width;
-                        entity.refAnchors[slot.ref] = { x: anchorX, y: anchorY };
-                        
-                        this.ctx.beginPath();
-                        this.ctx.arc(startX + 125, anchorY, 4, 0, Math.PI * 2);
-                        this.ctx.fillStyle = headerColor;
-                        this.ctx.fill();
-                        this.ctx.strokeStyle = "#FFFFFF";
-                        this.ctx.lineWidth = 1;
-                        this.ctx.stroke();
-                        
-                        this.ctx.fillStyle = "#CBD5E1";
-                        this.ctx.font = "500 10px Fira Code, monospace";
-                        this.ctx.textAlign = "left";
-                        this.ctx.fillText("ref ➜", startX + 82, anchorY);
                     } else {
-                        const valStr = String(slot.scalar !== undefined ? slot.scalar : (slot.val !== undefined ? slot.val : ""));
-                        const truncVal = valStr.length > 14 ? valStr.substring(0, 12) + ".." : valStr;
-                        this.ctx.fillStyle = "#F1F5F9";
-                        this.ctx.font = "500 11px Fira Code, monospace";
+                        const rowY = currentSlotY;
+                        const rowH = 26;
+                        
+                        this.ctx.fillStyle = "#94A3B8";
+                        this.ctx.font = "600 10px Fira Code, monospace";
                         this.ctx.textAlign = "center";
                         this.ctx.textBaseline = "middle";
-                        this.ctx.fillText(truncVal, colDividerX + (width - 75) / 2, anchorY);
-                    }
-                    
-                    if (idx < slots.length - 1) {
+                        const truncAttr = attrName.length > 9 ? attrName.substring(0, 8) + ".." : attrName;
+                        this.ctx.fillText(truncAttr, startX + 35, rowY + rowH / 2);
+                        
+                        const anchorY = rowY + rowH / 2;
+                        if (slot.ref) {
+                            const anchorX = startX + width;
+                            entity.refAnchors[slot.ref] = { x: anchorX, y: anchorY, color: headerColor };
+                            
+                            this.ctx.beginPath();
+                            this.ctx.arc(startX + 80, anchorY, 4, 0, Math.PI * 2);
+                            this.ctx.fillStyle = headerColor;
+                            this.ctx.fill();
+                            this.ctx.strokeStyle = "#FFFFFF";
+                            this.ctx.lineWidth = 1;
+                            this.ctx.stroke();
+                            
+                            this.ctx.fillStyle = "#E2E8F0";
+                            this.ctx.font = "500 10px Fira Code, monospace";
+                            this.ctx.textAlign = "left";
+                            this.ctx.fillText("──► ref", startX + 90, anchorY);
+                        } else {
+                            const valStr = String(slot.scalar !== undefined ? slot.scalar : (slot.val !== undefined ? slot.val : ""));
+                            const truncVal = valStr.length > 14 ? valStr.substring(0, 12) + ".." : valStr;
+                            this.ctx.fillStyle = "#F1F5F9";
+                            this.ctx.font = "500 11px Fira Code, monospace";
+                            this.ctx.textAlign = "center";
+                            this.ctx.textBaseline = "middle";
+                            this.ctx.fillText(truncVal, startX + 135, anchorY);
+                        }
+                        
                         this.ctx.beginPath();
-                        this.ctx.moveTo(startX, rowY + rowH);
-                        this.ctx.lineTo(startX + width, rowY + rowH);
-                        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+                        this.ctx.moveTo(startX + 10, rowY + rowH);
+                        this.ctx.lineTo(startX + width - 10, rowY + rowH);
+                        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
                         this.ctx.stroke();
+                        
+                        currentSlotY += rowH;
                     }
                 });
                 
