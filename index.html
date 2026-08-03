@@ -71,10 +71,13 @@
                         Python Code Editor
                     </div>
                     <div class="editor-header-controls" style="display: flex; align-items: center; gap: 10px;">
-                        <button id="btn-alert-toggle" class="btn btn-alert-on" title="Toggle Error Alerts Banner & Strict Rule Enforcement">
-                            Error Alerts: ON
+                        <button id="btn-autosave-toggle" class="btn btn-autosave-on" title="Auto Save: ON — Code is saved automatically on each line change">
+                            Auto Save: ON
                         </button>
                         <span class="file-tag" id="save-status-tag">Saved</span>
+                        <button id="btn-collapse-panel" class="btn-collapse" title="Collapse editor panel for full-screen canvas view">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        </button>
                     </div>
                 </div>
                 
@@ -103,6 +106,11 @@
 
             <!-- DRAGGABLE SPLIT RESIZER GUTTER BAR -->
             <div class="resizer" id="drag-resizer"></div>
+
+            <!-- FLOATING EXPAND BUTTON (visible only when panel is collapsed) -->
+            <button id="btn-expand-panel" class="btn-expand-floating" title="Expand editor panel" style="display:none;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
 
             <!-- RIGHT PANEL: VISUALIZATION ENGINE CANVAS -->
             <section class="panel panel-visualizer" id="panel-visualizer">

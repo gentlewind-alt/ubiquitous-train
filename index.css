@@ -173,30 +173,89 @@ select:focus {
     transform: translateY(-1px);
 }
 
-/* ERROR ALERTS TOGGLE BUTTON STYLES */
-.btn-alert-on {
-    background-color: rgba(16, 185, 129, 0.12);
-    color: #34D399;
-    border: 1px solid rgba(16, 185, 129, 0.35);
+/* AUTO SAVE TOGGLE BUTTON STYLES */
+.btn-autosave-on {
+    background-color: rgba(99, 102, 241, 0.14);
+    color: #A5B4FC;
+    border: 1px solid rgba(99, 102, 241, 0.35);
     font-weight: 600;
+    font-size: 11px;
+    padding: 4px 10px;
 }
 
-.btn-alert-on:hover {
-    background-color: rgba(16, 185, 129, 0.25);
-    border-color: #10B981;
-    box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+.btn-autosave-on:hover {
+    background-color: rgba(99, 102, 241, 0.28);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.25);
 }
 
-.btn-alert-off {
+.btn-autosave-off {
     background-color: rgba(148, 163, 184, 0.08);
     color: var(--text-muted);
     border: 1px solid var(--border-color);
     font-weight: 500;
+    font-size: 11px;
+    padding: 4px 10px;
 }
 
-.btn-alert-off:hover {
-    background-color: rgba(148, 163, 184, 0.2);
+.btn-autosave-off:hover {
+    background-color: rgba(148, 163, 184, 0.18);
     border-color: var(--border-highlight);
+}
+
+/* PANEL COLLAPSE TOGGLE BUTTON */
+.btn-collapse {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background-color: rgba(148, 163, 184, 0.08);
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.btn-collapse:hover {
+    background-color: rgba(99, 102, 241, 0.18);
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 8px rgba(99, 102, 241, 0.2);
+}
+
+/* FLOATING EXPAND BUTTON (when panel is collapsed) */
+.btn-expand-floating {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    box-shadow: 0 0 16px var(--accent-glow);
+    transition: all 0.2s ease;
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.btn-expand-floating:hover {
+    transform: translateY(-50%) scale(1.12);
+    box-shadow: 0 0 22px var(--accent-glow);
+}
+
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 12px var(--accent-glow); }
+    50% { box-shadow: 0 0 24px rgba(99, 102, 241, 0.6); }
 }
 
 /* TIMELINE PLAY/PAUSE TOGGLE BUTTON */
@@ -244,6 +303,22 @@ select:focus {
     width: 40%;
     min-width: 280px;
     border-right: 1px solid var(--border-color);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 0.25s ease;
+}
+
+.panel-editor.panel-collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    overflow: hidden;
+    border-right: none;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.resizer.panel-collapsed {
+    display: none;
 }
 
 .panel-visualizer {

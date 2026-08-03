@@ -15,7 +15,7 @@ class RVEApplication {
         this.algoSelect = document.getElementById('algorithm-select');
         this.speedSelect = document.getElementById('speed-select');
         
-        this.btnAlertToggle = document.getElementById('btn-alert-toggle');
+        this.btnAutosaveToggle = document.getElementById('btn-autosave-toggle');
         this.btnSave = document.getElementById('btn-save');
         this.btnRun = document.getElementById('btn-run');
         this.btnStepPrev = document.getElementById('btn-step-prev');
@@ -26,6 +26,10 @@ class RVEApplication {
         this.timelinePlayIcon = document.getElementById('timeline-play-icon');
         
         this.saveStatusTag = document.getElementById('save-status-tag');
+        this.btnCollapsePanel = document.getElementById('btn-collapse-panel');
+        this.btnExpandPanel = document.getElementById('btn-expand-panel');
+        this.panelEditor = document.getElementById('panel-editor');
+        this.dragResizer = document.getElementById('drag-resizer');
         
         this.timelineSlider = document.getElementById('timeline-slider');
         this.currentFrameLabel = document.getElementById('current-frame-label');
@@ -44,9 +48,10 @@ class RVEApplication {
         this.inspectorContent = document.getElementById('inspector-content');
         this.btnCloseInspector = document.getElementById('btn-close-inspector');
 
-        // Error Alerts Toggle State
-        const savedAlertState = localStorage.getItem('rve_error_alerts_mode');
-        this.errorAlertsEnabled = savedAlertState !== null ? JSON.parse(savedAlertState) : true;
+        // Auto Save Toggle State
+        const savedAutoSaveState = localStorage.getItem('rve_autosave_mode');
+        this.autoSaveEnabled = savedAutoSaveState !== null ? JSON.parse(savedAutoSaveState) : true;
+        this.isPanelCollapsed = false;
 
         // Unsaved & Realtime State
         this.isUnsaved = false;
@@ -83,10 +88,12 @@ class RVEApplication {
         this.initResizer();
         this.initCanvasPanAndZoom();
         this.initGlobalHardwareKeyboardShortcuts();
-        this.updateAlertToggleUI();
+        this.updateAutoSaveUI();
         window.addEventListener('resize', () => this.resizeCanvas());
 
-        this.btnAlertToggle.addEventListener('click', () => this.toggleErrorAlerts());
+        this.btnAutosaveToggle.addEventListener('click', () => this.toggleAutoSave());
+        this.btnCollapsePanel.addEventListener('click', () => this.toggleEditorPanel());
+        this.btnExpandPanel.addEventListener('click', () => this.toggleEditorPanel());
 
         this.codeEditor.addEventListener('input', () => {
             this.updateLineNumbers();
@@ -199,24 +206,49 @@ class RVEApplication {
         this.loadSavedCodeOnRefresh();
     }
 
-    // --- ERROR ALERTS TOGGLE STATE MANAGEMENT ---
-    toggleErrorAlerts() {
-        this.errorAlertsEnabled = !this.errorAlertsEnabled;
-        localStorage.setItem('rve_error_alerts_mode', JSON.stringify(this.errorAlertsEnabled));
-        this.updateAlertToggleUI();
-        this.triggerLiveLineCompilation();
+    // --- AUTO SAVE TOGGLE STATE MANAGEMENT ---
+    toggleAutoSave() {
+        this.autoSaveEnabled = !this.autoSaveEnabled;
+        localStorage.setItem('rve_autosave_mode', JSON.stringify(this.autoSaveEnabled));
+        this.updateAutoSaveUI();
+        if (this.autoSaveEnabled) {
+            // Immediately save on re-enable
+            this.triggerLiveLineCompilation();
+        }
     }
 
-    updateAlertToggleUI() {
-        if (this.errorAlertsEnabled) {
-            this.btnAlertToggle.className = "btn btn-alert-on";
-            this.btnAlertToggle.innerText = "Error Alerts: ON";
-            this.btnAlertToggle.title = "Error Alerts ON: Displays red warning banner on rule conflict / CPython exceptions";
+    updateAutoSaveUI() {
+        if (this.autoSaveEnabled) {
+            this.btnAutosaveToggle.className = "btn btn-autosave-on";
+            this.btnAutosaveToggle.innerText = "Auto Save: ON";
+            this.btnAutosaveToggle.title = "Auto Save ON: Code is saved to localStorage on every line change";
         } else {
-            this.btnAlertToggle.className = "btn btn-alert-off";
-            this.btnAlertToggle.innerText = "Error Alerts: OFF";
-            this.btnAlertToggle.title = "Error Alerts OFF: Runs in silent fallback mode without blocking banners";
+            this.btnAutosaveToggle.className = "btn btn-autosave-off";
+            this.btnAutosaveToggle.innerText = "Auto Save: OFF";
+            this.btnAutosaveToggle.title = "Auto Save OFF: Only saves when you press Ctrl+S or the Save button";
         }
+    }
+
+    // --- EDITOR PANEL COLLAPSE / EXPAND ---
+    toggleEditorPanel() {
+        this.isPanelCollapsed = !this.isPanelCollapsed;
+        if (this.isPanelCollapsed) {
+            // Store current width so we can restore it on expand
+            this.savedPanelWidth = this.panelEditor.style.width || '40%';
+            this.panelEditor.classList.add('panel-collapsed');
+            this.dragResizer.classList.add('panel-collapsed');
+            this.btnExpandPanel.style.display = 'inline-flex';
+        } else {
+            this.panelEditor.classList.remove('panel-collapsed');
+            this.dragResizer.classList.remove('panel-collapsed');
+            this.btnExpandPanel.style.display = 'none';
+            // Restore saved panel width if it was set by resizer
+            if (this.savedPanelWidth) {
+                this.panelEditor.style.width = this.savedPanelWidth;
+            }
+        }
+        // Trigger canvas resize after animation completes
+        setTimeout(() => this.resizeCanvas(), 320);
     }
 
     // --- REAL-TIME LIVE COMPILATION DETECTOR ---
@@ -238,8 +270,10 @@ class RVEApplication {
         const code = this.codeEditor.value;
         if (!code.trim()) return;
 
-        this.markSaved();
-        localStorage.setItem('rve_saved_code', code);
+        if (this.autoSaveEnabled) {
+            this.markSaved();
+            localStorage.setItem('rve_saved_code', code);
+        }
 
         if (this.isPyodideReady && this.pyodide) {
             try {
@@ -537,7 +571,11 @@ class RVEApplication {
 
     markUnsaved() {
         this.isUnsaved = true;
-        this.saveStatusTag.innerText = "Unsaved *";
+        if (!this.autoSaveEnabled) {
+            this.saveStatusTag.innerText = "Unsaved · Ctrl+S";
+        } else {
+            this.saveStatusTag.innerText = "Unsaved *";
+        }
         this.saveStatusTag.classList.add('unsaved');
     }
 
