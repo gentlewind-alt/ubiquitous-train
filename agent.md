@@ -1,24 +1,29 @@
-# agent.md — AGY Operating Manifest & Kimi-K3 Mentorship Protocol
+# agent.md — Bootstrap Manifest
 
-> **Note**: This file mirrors [`AGENTS.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/AGENTS.md) as the authoritative operating context for AGY agents and Kimi-K3 mentorship integration.
+This repository uses **AGENTS.md** as the single authoritative engineering specification.
 
----
+All AI agents must:
 
-## 1. Kimi-K3 Master Mentorship & Design Guidance
-- **Role**: Lead Architect, System Designer, and Coding Mentor (`moonshotai/kimi-k3-free`).
-- **Endpoint**: `https://api.tokenrouter.com/v1` (TokenRouter)
-- **Bridge Script**: `C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py`
-- **AGY Skills**: All 39 AGY skills indexed and available.
+1. Read `AGENTS.md` completely before making any modification.
+2. Treat `AGENTS.md` as the source of truth for:
+   - Architecture
+   - Coding standards
+   - Rendering pipeline
+   - Semantic engine
+   - Visualization philosophy
+   - Editing workflow
+   - Git workflow
+3. Never duplicate architectural documentation contained in AGENTS.md.
+4. If AGENTS.md and any other document disagree, AGENTS.md takes precedence.
+5. Before implementing any feature:
+   - Understand the architecture.
+   - Produce a plan.
+   - Identify affected subsystems.
+   - Verify existing implementation.
+   - Then edit.
 
-### Operating Directive for Main AGY Models
-1. **Channel Kimi's Mindset**: Write code with Kimi's architectural elegance, clean design system discipline, and robust error resilience as if you are Kimi yourself.
-2. **Consult Kimi for Design & Planning**: Use `kimi_agent.py` to consult Kimi for architectural blueprints, UI design guidelines (`/frontend-design`), and step-by-step implementation plans (`/plan`).
-3. **Execution Command**:
-   ```powershell
-   python C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py -p "<your design prompt or skill request>"
-   ```
+Do not summarize AGENTS.md.
+Do not skip sections.
+Do not assume missing details.
 
----
-
-## 2. AGENTS.md Full Manifest
-For full architecture map, canvas renderer contracts, data type definitions, layout algorithms, and design tokens, see [`AGENTS.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/AGENTS.md).
+The quality of the implementation depends on understanding the complete project context.
