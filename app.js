@@ -400,6 +400,12 @@ class RVEApplication {
         const code = this.codeEditor.value;
         if (!code.trim()) return;
 
+        // Safety Guard: Pause live-compile for large stress test inputs (>15,000 chars or >250 lines)
+        if (code.length > 15000 || code.split('\n').length > 250) {
+            this.printTerminal("[RVE Engine] Large script detected. Live compile paused. Press Ctrl+Enter or click 'Run' to execute.", "info");
+            return;
+        }
+
         if (this.autoSaveEnabled) {
             this.markSaved();
             localStorage.setItem('rve_saved_code', code);
@@ -425,20 +431,11 @@ class RVEApplication {
     }
 
     loadSavedCodeOnRefresh() {
-        const savedCode = localStorage.getItem('rve_saved_code');
-        if (savedCode !== null && savedCode.trim() !== '') {
-            this.codeEditor.value = savedCode;
-            this.updateLineNumbers();
-            this.markSaved();
-            this.printTerminal("[RVE Engine] Restored saved code from local storage.", "info");
-            
-            setTimeout(() => {
-                this.triggerLiveLineCompilation();
-            }, 300);
-        } else {
-            this.updateLineNumbers();
-            this.markSaved();
-        }
+        // Disabled automatic code restoration from localStorage on refresh to prevent non-responsiveness on large scripts
+        localStorage.removeItem('rve_saved_code');
+        this.updateLineNumbers();
+        this.markSaved();
+        this.printTerminal("[RVE Engine] Editor ready. Auto-restore on refresh is disabled.", "info");
     }
 
     // --- GLOBAL HARDWARE KEYBOARD CONTROLS ---
@@ -1089,7 +1086,7 @@ def capture_snapshot(line_no):
     })
 
 def trace_func(frame, event, arg):
-    if event == 'line':
+    if event == 'line' and len(line_snapshots) < 150:
         capture_snapshot(frame.f_lineno)
     return trace_func
 
