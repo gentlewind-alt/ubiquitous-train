@@ -922,15 +922,10 @@ json.dumps({
 
         if (res.error) {
             this.printTerminal(`[Rule Conflict / Exception] ${res.error}`, "output");
-
-            if (this.errorAlertsEnabled) {
-                this.actionBanner.classList.add('error-alert');
-                this.actionLineBadge.innerText = "⚠️ Error";
-                this.actionDescription.innerText = `Rule Conflict: ${res.error}`;
-                this.highlightLine(this.lastCompiledLineCount, true);
-            } else {
-                this.actionBanner.classList.remove('error-alert');
-            }
+            this.actionBanner.classList.add('error-alert');
+            this.actionLineBadge.innerText = "⚠️ Error";
+            this.actionDescription.innerText = `Rule Conflict: ${res.error}`;
+            this.highlightLine(this.lastCompiledLineCount, true);
         } else {
             this.actionBanner.classList.remove('error-alert');
         }
