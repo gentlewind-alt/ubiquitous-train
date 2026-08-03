@@ -1013,7 +1013,7 @@ def capture_snapshot(line_no):
             "id": f"py_0x{id(obj):x}",
             "varName": name or cls_name,
             "label": str(val),
-            "type": "TreeNode" if (left_obj or right_obj or 'Tree' in cls_name or hasattr(obj, 'key')) else "Node",
+            "type": "TreeNode" if (left_obj or right_obj or 'Tree' in cls_name or hasattr(obj, 'key')) else ("ClassObject" if (hasattr(obj, '__dict__') or hasattr(obj, '__slots__')) else "Node"),
             "pyType": cls_name,
             "pyId": f"0x{id(obj):x}",
             "height": h,
@@ -1223,7 +1223,15 @@ def capture_snapshot(line_no):
                         idx += 1
             else:
                 head = getattr(v, 'root', getattr(v, 'head', v))
-                inspect_obj(head, k)
+                target_id = inspect_obj(head, k)
+                if target_id and isinstance(target_id, str):
+                    objects.append({
+                        "id": f"var_{k}",
+                        "varName": k,
+                        "type": "VariableRef",
+                        "label": k,
+                        "targetId": target_id
+                    })
 
     line_snapshots.append({
         "line": line_no,
@@ -1747,6 +1755,44 @@ json.dumps({
                         colY += h + 25;
                     });
                     if (colY > maxColY) maxColY = colY;
+                });
+
+            } else if (firstType === "ClassObject") {
+                const classGroups = new Map();
+                groupObjects.forEach(obj => {
+                    const cType = obj.pyType || "ClassObject";
+                    if (!classGroups.has(cType)) classGroups.set(cType, []);
+                    classGroups.get(cType).push(obj);
+                });
+
+                let colIndex = 0;
+                let maxColY = currentY;
+
+                classGroups.forEach((cObjects, cType) => {
+                    let colY = currentY;
+                    const colX = 300 + colIndex * 300;
+                    
+                    cObjects.forEach(obj => {
+                        const slotsCount = (obj.slots ? obj.slots.length : 1);
+                        const h = 30 + slotsCount * 26;
+                        obj.x = colX + 100;
+                        obj.y = colY + h / 2;
+                        obj.width = 200;
+                        obj.height = h;
+                        
+                        const vRef = activeObjects.find(o => o.type === "VariableRef" && o.targetId === obj.id);
+                        if (vRef) {
+                            this.ctx.font = "600 11px Fira Code, monospace";
+                            const textWidth = this.ctx.measureText(vRef.label).width || 40;
+                            vRef.width = Math.max(60, textWidth + 24);
+                            vRef.x = 80;
+                            vRef.y = obj.y;
+                        }
+                        
+                        colY += h + 30;
+                    });
+                    if (colY > maxColY) maxColY = colY;
+                    colIndex++;
                 });
 
                 currentY = maxColY + 40;
@@ -2492,6 +2538,127 @@ json.dumps({
                     
                     // Row divider line
                     if (idx < items.length - 1) {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(startX, rowY + rowH);
+                        this.ctx.lineTo(startX + width, rowY + rowH);
+                        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+                        this.ctx.stroke();
+                    }
+                });
+                
+                this.ctx.restore();
+            } else if (entity.type === "ClassObject") {
+                const slots = entity.slots || [];
+                const rowH = 26;
+                const headerH = 30;
+                const totalH = headerH + Math.max(1, slots.length) * rowH;
+                const width = entity.width || 200;
+                
+                const startX = renderX - width / 2;
+                const startY = renderY - totalH / 2;
+                
+                this.ctx.save();
+                
+                const isStudent = (entity.pyType || "").toLowerCase().includes("student");
+                const isCourse = (entity.pyType || "").toLowerCase().includes("course");
+                const headerBg = isStudent ? "rgba(99, 102, 241, 0.25)" : (isCourse ? "rgba(16, 185, 129, 0.25)" : "rgba(236, 72, 153, 0.25)");
+                const headerColor = isStudent ? "#818CF8" : (isCourse ? "#34D399" : "#F472B6");
+                const strokeColor = isSelected ? "#FFFFFF" : (isStudent ? "#6366F1" : (isCourse ? "#10B981" : "#EC4899"));
+                const icon = isStudent ? "🎓" : (isCourse ? "📚" : "📦");
+                
+                this.ctx.fillStyle = "rgba(18, 24, 38, 0.92)";
+                this.ctx.beginPath();
+                this.ctx.roundRect(startX, startY, width, totalH, 8);
+                this.ctx.fill();
+                this.ctx.strokeStyle = strokeColor;
+                this.ctx.lineWidth = isSelected ? 2.5 : 1.8;
+                this.ctx.stroke();
+                
+                this.ctx.fillStyle = headerBg;
+                this.ctx.beginPath();
+                this.ctx.roundRect(startX, startY, width, headerH, [8, 8, 0, 0]);
+                this.ctx.fill();
+                
+                this.ctx.fillStyle = headerColor;
+                this.ctx.font = "700 11px Fira Code, monospace";
+                this.ctx.textAlign = "center";
+                this.ctx.textBaseline = "middle";
+                const classTitle = `${icon} ${entity.pyType}: ${entity.label}`;
+                this.ctx.fillText(classTitle.length > 24 ? classTitle.substring(0, 22) + ".." : classTitle, startX + width / 2, startY + headerH / 2);
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(startX, startY + headerH);
+                this.ctx.lineTo(startX + width, startY + headerH);
+                this.ctx.strokeStyle = strokeColor;
+                this.ctx.lineWidth = 1;
+                this.ctx.stroke();
+                
+                const colDividerX = startX + 75;
+                this.ctx.beginPath();
+                this.ctx.moveTo(colDividerX, startY + headerH);
+                this.ctx.lineTo(colDividerX, startY + totalH);
+                this.ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+                this.ctx.stroke();
+                
+                entity.refAnchors = {};
+                
+                slots.forEach((slot, idx) => {
+                    const rowY = startY + headerH + idx * rowH;
+                    const attrName = String(slot.attr || "");
+                    
+                    this.ctx.fillStyle = "#94A3B8";
+                    this.ctx.font = "600 10px Fira Code, monospace";
+                    this.ctx.textAlign = "center";
+                    this.ctx.textBaseline = "middle";
+                    const truncAttr = attrName.length > 9 ? attrName.substring(0, 8) + ".." : attrName;
+                    this.ctx.fillText(truncAttr, startX + 37, rowY + rowH / 2);
+                    
+                    const anchorY = rowY + rowH / 2;
+                    if (slot.isList && slot.listRefs && slot.listRefs.length > 0) {
+                        const anchorX = startX + width;
+                        slot.listRefs.forEach(refId => {
+                            entity.refAnchors[refId] = { x: anchorX, y: anchorY };
+                        });
+                        
+                        this.ctx.beginPath();
+                        this.ctx.arc(startX + 125, anchorY, 4, 0, Math.PI * 2);
+                        this.ctx.fillStyle = headerColor;
+                        this.ctx.fill();
+                        this.ctx.strokeStyle = "#FFFFFF";
+                        this.ctx.lineWidth = 1;
+                        this.ctx.stroke();
+                        
+                        this.ctx.fillStyle = "#CBD5E1";
+                        this.ctx.font = "500 10px Fira Code, monospace";
+                        this.ctx.textAlign = "left";
+                        this.ctx.fillText(`[${slot.listRefs.length}] ➜`, startX + 82, anchorY);
+                    } else if (slot.ref) {
+                        const anchorX = startX + width;
+                        entity.refAnchors[slot.ref] = { x: anchorX, y: anchorY };
+                        
+                        this.ctx.beginPath();
+                        this.ctx.arc(startX + 125, anchorY, 4, 0, Math.PI * 2);
+                        this.ctx.fillStyle = headerColor;
+                        this.ctx.fill();
+                        this.ctx.strokeStyle = "#FFFFFF";
+                        this.ctx.lineWidth = 1;
+                        this.ctx.stroke();
+                        
+                        this.ctx.fillStyle = "#CBD5E1";
+                        this.ctx.font = "500 10px Fira Code, monospace";
+                        this.ctx.textAlign = "left";
+                        this.ctx.fillText("ref ➜", startX + 82, anchorY);
+                    } else {
+                        const valStr = String(slot.scalar !== undefined ? slot.scalar : (slot.val !== undefined ? slot.val : ""));
+                        const truncVal = valStr.length > 14 ? valStr.substring(0, 12) + ".." : valStr;
+                        this.ctx.fillStyle = "#F1F5F9";
+                        this.ctx.font = "500 11px Fira Code, monospace";
+                        this.ctx.textAlign = "center";
+                        this.ctx.textBaseline = "middle";
+                        this.ctx.fillText(truncVal, colDividerX + (width - 75) / 2, anchorY);
+                    }
+                    
+                    if (idx < slots.length - 1) {
                         this.ctx.beginPath();
                         this.ctx.moveTo(startX, rowY + rowH);
                         this.ctx.lineTo(startX + width, rowY + rowH);
