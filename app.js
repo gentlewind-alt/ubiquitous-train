@@ -1,7 +1,61 @@
 // --- RVE WEB APPLICATION CORE ENGINE (REINGOLD-TILFORD TREE LAYOUT & AVL SEMANTICS) ---
 
 const PRESETS = {
-    none: ""
+    none: "",
+    filesystem: `class Folder:
+    def __init__(self, name):
+        self.name = name
+        self.children = []
+
+user = Folder("User")
+home = Folder("Home")
+user.children.append(home)
+
+docs = Folder("Documents")
+pics = Folder("Pictures")
+proj = Folder("Projects")
+home.children.extend([docs, pics, proj])
+
+rve = Folder("RVE Engine")
+proj.children.append(rve)
+
+src = Folder("src")
+assets = Folder("assets")
+docs_folder = Folder("docs")
+rve.children.extend([src, assets, docs_folder])
+`,
+    orgchart: `class Employee:
+    def __init__(self, name, title):
+        self.name = name
+        self.title = title
+        self.reports = []
+
+ceo = Employee("Alice", "CEO")
+vp_eng = Employee("Bob", "VP Eng")
+vp_sales = Employee("Carol", "VP Sales")
+ceo.reports.extend([vp_eng, vp_sales])
+
+lead1 = Employee("Dave", "Tech Lead")
+lead2 = Employee("Eve", "Tech Lead")
+vp_eng.reports.extend([lead1, lead2])
+
+dev1 = Employee("Frank", "Senior Dev")
+dev2 = Employee("Grace", "Dev")
+lead1.reports.extend([dev1, dev2])
+`,
+    avl: `class Node:
+    def __init__(self, key):
+        self.key = key
+        self.left = None
+        self.right = None
+        self.height = 1
+
+root = Node(50)
+root.left = Node(30)
+root.right = Node(70)
+root.left.left = Node(20)
+root.left.right = Node(40)
+`
 };
 
 class RVEApplication {
@@ -814,6 +868,49 @@ def inspect_obj(obj, name=""):
     h = int(h_attr) if isinstance(h_attr, (int, float)) else (max(lh, rh) + 1)
     bf = int(lh - rh)
 
+    slots_data = []
+    child_objs_to_inspect = []
+
+    attrs = {}
+    if hasattr(obj, '__dict__'):
+        attrs.update(obj.__dict__)
+    elif hasattr(obj, '__slots__'):
+        for s in getattr(obj, '__slots__'):
+            if hasattr(obj, s):
+                attrs[s] = getattr(obj, s)
+
+    for attr_name, attr_val in list(attrs.items())[:20]:
+        if attr_name.startswith('__') or callable(attr_val):
+            continue
+        if isinstance(attr_val, list):
+            list_refs = []
+            for item in attr_val:
+                if item is not None and not callable(item) and not isinstance(item, (int, float, str, bool, dict, tuple, set)):
+                    list_refs.append(f"py_0x{id(item):x}")
+                    child_objs_to_inspect.append((item, f"{name}.{attr_name}" if name else attr_name))
+            slots_data.append({
+                "attr": attr_name,
+                "ref": None,
+                "isList": True,
+                "listRefs": list_refs
+            })
+        elif attr_val is not None and not callable(attr_val) and not isinstance(attr_val, (int, float, str, bool, dict, tuple, set)):
+            slots_data.append({
+                "attr": attr_name,
+                "ref": f"py_0x{id(attr_val):x}",
+                "isList": False,
+                "listRefs": []
+            })
+            child_objs_to_inspect.append((attr_val, f"{name}.{attr_name}" if name else attr_name))
+        else:
+            slots_data.append({
+                "attr": attr_name,
+                "ref": None,
+                "scalar": str(attr_val) if attr_val is not None else None,
+                "isList": False,
+                "listRefs": []
+            })
+
     obj_data = {
         "id": f"py_0x{id(obj):x}",
         "varName": name or cls_name,
@@ -827,13 +924,17 @@ def inspect_obj(obj, name=""):
         "next": f"py_0x{id(next_obj):x}" if next_obj else None,
         "left": f"py_0x{id(left_obj):x}" if left_obj else None,
         "right": f"py_0x{id(right_obj):x}" if right_obj else None,
-        "manager": f"py_0x{id(manager_obj):x}" if manager_obj else None
+        "manager": f"py_0x{id(manager_obj):x}" if manager_obj else None,
+        "slots": slots_data
     }
     objects.append(obj_data)
     
     if next_obj: inspect_obj(next_obj, f"{name}.next" if name else "")
     if left_obj: inspect_obj(left_obj, f"{name}.left" if name else "")
     if right_obj: inspect_obj(right_obj, f"{name}.right" if name else "")
+    for child_item, child_name in child_objs_to_inspect:
+        inspect_obj(child_item, child_name)
+
     return obj_data["id"]
 
 for k, v in list(user_globals.items()):
@@ -1009,9 +1110,223 @@ json.dumps({
         }];
     }
 
+    // --- TOPOLOGY DETECTOR (IU-2) ---
+    detectTopology(objects) {
+        const customNodes = objects.filter(o => o.type !== "Primitive" && o.type !== "ArrayCell" && o.type !== "DictBucket");
+        if (customNodes.length === 0) {
+            return { topology: "Flat", childAttr: null, roots: [], childrenMap: new Map() };
+        }
+
+        const objectMap = new Map();
+        const inDegree = new Map();
+        const childrenMap = new Map();
+        let discoveredChildAttr = null;
+        let hasNaryList = false;
+
+        customNodes.forEach(o => {
+            objectMap.set(o.id, o);
+            inDegree.set(o.id, 0);
+            childrenMap.set(o.id, []);
+        });
+
+        customNodes.forEach(o => {
+            let naryRefs = [];
+            if (o.slots && Array.isArray(o.slots)) {
+                for (const slot of o.slots) {
+                    if (slot.isList && Array.isArray(slot.listRefs) && slot.listRefs.length > 0) {
+                        const validRefs = slot.listRefs.filter(refId => objectMap.has(refId));
+                        if (validRefs.length > 0) {
+                            discoveredChildAttr = slot.attr;
+                            naryRefs = validRefs;
+                            hasNaryList = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (naryRefs.length > 0) {
+                naryRefs.forEach(childId => {
+                    childrenMap.get(o.id).push(childId);
+                    inDegree.set(childId, (inDegree.get(childId) || 0) + 1);
+                });
+            } else {
+                if (o.left && objectMap.has(o.left)) {
+                    childrenMap.get(o.id).push(o.left);
+                    inDegree.set(o.left, (inDegree.get(o.left) || 0) + 1);
+                }
+                if (o.right && objectMap.has(o.right)) {
+                    childrenMap.get(o.id).push(o.right);
+                    inDegree.set(o.right, (inDegree.get(o.right) || 0) + 1);
+                }
+                if (childrenMap.get(o.id).length === 0 && o.next && objectMap.has(o.next)) {
+                    childrenMap.get(o.id).push(o.next);
+                    inDegree.set(o.next, (inDegree.get(o.next) || 0) + 1);
+                }
+            }
+        });
+
+        const visited = new Set();
+        const recStack = new Set();
+        let hasCycle = false;
+
+        const isCyclic = (nodeId) => {
+            visited.add(nodeId);
+            recStack.add(nodeId);
+            const children = childrenMap.get(nodeId) || [];
+            for (const childId of children) {
+                if (!visited.has(childId)) {
+                    if (isCyclic(childId)) return true;
+                } else if (recStack.has(childId)) {
+                    return true;
+                }
+            }
+            recStack.delete(nodeId);
+            return false;
+        };
+
+        let roots = customNodes.filter(o => inDegree.get(o.id) === 0).map(o => o.id);
+        if (roots.length === 0 && customNodes.length > 0) {
+            roots = [customNodes[0].id];
+        }
+
+        for (const rootId of roots) {
+            if (isCyclic(rootId)) {
+                hasCycle = true;
+                break;
+            }
+        }
+
+        if (hasCycle) {
+            return { topology: "CyclicGraph", childAttr: discoveredChildAttr, roots, childrenMap };
+        }
+
+        let maxChildren = 0;
+        childrenMap.forEach((children) => {
+            if (children.length > maxChildren) maxChildren = children.length;
+        });
+
+        let topology = "Generic";
+        if (hasNaryList || maxChildren > 2) {
+            topology = "NaryTree";
+        } else if (customNodes.some(o => o.left || o.right || o.type === "TreeNode")) {
+            topology = "BinaryTree";
+        } else if (maxChildren === 1 && customNodes.some(o => o.next)) {
+            topology = "LinkedList";
+        } else if (maxChildren > 0) {
+            topology = "NaryTree";
+        }
+
+        return {
+            topology,
+            childAttr: discoveredChildAttr,
+            rootId: roots[0] || null,
+            roots,
+            childrenMap
+        };
+    }
+
+    // --- DOMAIN DETECTOR (IU-3) ---
+    detectDomain(objects, profile) {
+        const DOMAIN_REGISTRY = [
+            {
+                name: "Filesystem",
+                classSignals: ["folder", "directory", "dir", "file", "path"],
+                attrSignals: ["children", "files", "subfolders", "name", "extension", "path"],
+                icon: "📁", leafIcon: "📄",
+                nodeColor: "#10B981", edgeColor: "#059669"
+            },
+            {
+                name: "OrgChart",
+                classSignals: ["employee", "person", "manager", "worker", "department"],
+                attrSignals: ["reports", "team", "subordinates", "employees", "name", "title", "role"],
+                icon: "👤", leafIcon: "👤",
+                nodeColor: "#6366F1", edgeColor: "#4F46E5"
+            },
+            {
+                name: "AST",
+                classSignals: ["astnode", "node", "statement", "expression", "decl"],
+                attrSignals: ["children", "body", "args", "op", "value"],
+                icon: "⬡", leafIcon: "◉",
+                nodeColor: "#F59E0B", edgeColor: "#D97706"
+            },
+            {
+                name: "SceneGraph",
+                classSignals: ["scenenode", "gameobject", "transform", "entity"],
+                attrSignals: ["children", "position", "rotation", "scale"],
+                icon: "⬜", leafIcon: "⬜",
+                nodeColor: "#8B5CF6", edgeColor: "#7C3AED"
+            },
+            {
+                name: "Menu",
+                classSignals: ["menuitem", "menu", "navitem", "option"],
+                attrSignals: ["children", "label", "href", "icon", "disabled"],
+                icon: "☰", leafIcon: "▪",
+                nodeColor: "#EC4899", edgeColor: "#DB2777"
+            }
+        ];
+
+        const pyTypes = new Set(objects.map(o => (o.pyType || "").toLowerCase()));
+        const attrNames = new Set();
+        objects.forEach(o => {
+            if (o.slots && Array.isArray(o.slots)) {
+                o.slots.forEach(s => attrNames.add((s.attr || "").toLowerCase()));
+            }
+        });
+
+        let bestDomain = null;
+        let maxScore = 0;
+
+        DOMAIN_REGISTRY.forEach(domain => {
+            let classMatches = 0;
+            domain.classSignals.forEach(sig => {
+                if (pyTypes.has(sig)) classMatches++;
+            });
+
+            let attrMatches = 0;
+            domain.attrSignals.forEach(sig => {
+                if (attrNames.has(sig)) attrMatches++;
+            });
+
+            const classScore = domain.classSignals.length > 0 ? classMatches / domain.classSignals.length : 0;
+            const attrScore = domain.attrSignals.length > 0 ? attrMatches / domain.attrSignals.length : 0;
+            const confidence = (classScore * 0.6) + (attrScore * 0.4);
+
+            if (confidence > maxScore) {
+                maxScore = confidence;
+                bestDomain = domain;
+            }
+        });
+
+        if (!bestDomain || maxScore < 0.2) {
+            return {
+                ...profile,
+                domain: "Generic",
+                domainConfidence: 0,
+                icon: null,
+                leafIcon: null,
+                nodeColor: "#6366F1",
+                edgeColor: "rgba(255, 255, 255, 0.35)"
+            };
+        }
+
+        return {
+            ...profile,
+            domain: bestDomain.name,
+            domainConfidence: maxScore,
+            icon: bestDomain.icon,
+            leafIcon: bestDomain.leafIcon,
+            nodeColor: bestDomain.nodeColor,
+            edgeColor: bestDomain.edgeColor
+        };
+    }
+
     // --- REINGOLD-TILFORD INSPIRED TREE LAYOUT SOLVER (NO OVERLAPS & CLEAN HIERARCHY) ---
     solveLayoutConstraintsForObjects(objects) {
         if (!objects || objects.length === 0) return [];
+
+        const profile = this.detectDomain(objects, this.detectTopology(objects));
+
 
         // 1. Filter out redundant Primitive objects if a Tree Graph is active to eliminate duplicate representations
         const treeNodes = objects.filter(o => o.type === "TreeNode");
@@ -1093,6 +1408,71 @@ json.dumps({
                 const initialLevelSpacing = Math.max(45, Math.min(180, treeWidth * 18));
 
                 positionReingoldTilford(root.id, cx, currentY + 30, initialLevelSpacing);
+                currentY += 320;
+            } else if (firstType === "NaryNode" || (profile && profile.topology === "NaryTree")) {
+                const cx = (this.canvas.width / 2) || 380;
+
+                const getSubtreeLeafCount = (nodeId, visitedNodes = new Set()) => {
+                    if (visitedNodes.has(nodeId)) return 1;
+                    visitedNodes.add(nodeId);
+
+                    const children = profile.childrenMap.get(nodeId) || [];
+                    if (children.length === 0) return 1;
+
+                    let total = 0;
+                    children.forEach(cId => {
+                        total += getSubtreeLeafCount(cId, visitedNodes);
+                    });
+                    return Math.max(1, total);
+                };
+
+                const positionNaryTree = (nodeId, x, y, availableWidth, visitedNodes = new Set()) => {
+                    if (visitedNodes.has(nodeId)) return;
+                    visitedNodes.add(nodeId);
+
+                    const node = activeObjects.find(o => o.id === nodeId);
+                    if (!node) return;
+
+                    node.type = "NaryNode";
+                    node.x = x;
+                    node.y = y;
+
+                    const children = profile.childrenMap.get(nodeId) || [];
+                    node.children = children;
+
+                    const isLeaf = children.length === 0;
+                    node.icon = isLeaf ? profile.leafIcon : profile.icon;
+                    node.color = profile.nodeColor || "#6366F1";
+                    node.edgeColor = profile.edgeColor || "#4F46E5";
+
+                    if (children.length > 0) {
+                        const childLeafCounts = children.map(cId => getSubtreeLeafCount(cId));
+                        const totalLeaves = childLeafCounts.reduce((a, b) => a + b, 0);
+
+                        let currentX = x - (availableWidth / 2);
+                        children.forEach((childId, idx) => {
+                            const childWidthRatio = childLeafCounts[idx] / totalLeaves;
+                            const childAllocatedWidth = availableWidth * childWidthRatio;
+                            const childCenterX = currentX + (childAllocatedWidth / 2);
+
+                            positionNaryTree(childId, childCenterX, y + 80, childAllocatedWidth, visitedNodes);
+                            currentX += childAllocatedWidth;
+                        });
+                    }
+                };
+
+                const totalForestLeaves = profile.roots.map(rId => getSubtreeLeafCount(rId)).reduce((a, b) => a + b, 0);
+                const totalForestWidth = Math.max(totalForestLeaves * 70, Math.min(900, (this.canvas.width || 800) * 0.85));
+
+                let startForestX = cx - (totalForestWidth / 2);
+                profile.roots.forEach((rootId) => {
+                    const rootLeafCount = getSubtreeLeafCount(rootId);
+                    const rootWidth = (rootLeafCount / (totalForestLeaves || 1)) * totalForestWidth;
+                    const rootCenterX = startForestX + (rootWidth / 2);
+                    positionNaryTree(rootId, rootCenterX, currentY + 30, rootWidth);
+                    startForestX += rootWidth;
+                });
+
                 currentY += 320;
             } else { // Linked list / General Node
                 groupObjects.forEach((node, idx) => {
@@ -1184,6 +1564,19 @@ json.dumps({
             if (entity.right && this.entities.has(entity.right)) {
                 const target = this.entities.get(entity.right);
                 this.drawLineWithEdgeBadge(entity.x + 10, entity.y + 16, target.x - 10, target.y - 16, "R");
+            }
+            if (entity.children && Array.isArray(entity.children) && entity.children.length > 0) {
+                entity.children.forEach(childId => {
+                    if (this.entities.has(childId)) {
+                        const target = this.entities.get(childId);
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(entity.x, entity.y + 18);
+                        this.ctx.lineTo(target.x, target.y - 18);
+                        this.ctx.strokeStyle = entity.edgeColor || "rgba(255, 255, 255, 0.35)";
+                        this.ctx.lineWidth = 2;
+                        this.ctx.stroke();
+                    }
+                });
             }
             if (entity.manager && this.entities.has(entity.manager)) {
                 const target = this.entities.get(entity.manager);
@@ -1278,6 +1671,27 @@ json.dumps({
                     this.ctx.font = "600 9px Fira Code, monospace";
                     this.ctx.textAlign = "center";
                     this.ctx.fillText(`h=${entity.height} bf=${entity.balanceFactor ?? 0}`, entity.x, entity.y + 28);
+                }
+            } else if (entity.type === "NaryNode") {
+                this.ctx.beginPath();
+                this.ctx.arc(entity.x, entity.y, 22, 0, Math.PI * 2);
+                this.ctx.fillStyle = entity.color || "#6366F1";
+                this.ctx.fill();
+                this.ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+
+                this.ctx.fillStyle = "#FFFFFF";
+                this.ctx.font = "700 12px Fira Code, monospace";
+                this.ctx.textAlign = "center";
+                this.ctx.textBaseline = "middle";
+                this.ctx.fillText(entity.label, entity.x, entity.y);
+
+                if (entity.icon) {
+                    this.ctx.font = "16px sans-serif";
+                    this.ctx.textAlign = "center";
+                    this.ctx.textBaseline = "bottom";
+                    this.ctx.fillText(entity.icon, entity.x, entity.y - 24);
                 }
             } else if (entity.type === "Primitive") {
                 this.ctx.fillStyle = "rgba(245, 158, 11, 0.15)";
@@ -1405,6 +1819,12 @@ json.dumps({
                 <span class="inspect-label">CPython Pointer</span>
                 <span class="inspect-val">${entity.pyId}</span>
             </div>
+            ${entity.type === "NaryNode" ? `
+            <div class="inspect-item">
+                <span class="inspect-label">Children (${(entity.children || []).length})</span>
+                <span class="inspect-val">${(entity.children || []).join(', ') || 'None'}</span>
+            </div>
+            ` : `
             <div class="inspect-item">
                 <span class="inspect-label">Left Child</span>
                 <span class="inspect-val">${entity.left || 'None'}</span>
@@ -1413,6 +1833,7 @@ json.dumps({
                 <span class="inspect-label">Right Child</span>
                 <span class="inspect-val">${entity.right || 'None'}</span>
             </div>
+            `}
         `;
     }
 
