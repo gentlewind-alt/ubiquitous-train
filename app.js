@@ -1051,17 +1051,54 @@ def capture_snapshot(line_no):
                         "color": "#8B5CF6"
                     })
             elif isinstance(v, list):
-                for idx, item in enumerate(v[:50]):
+                # Detect 2D Rectangular Matrix (nested list of equal length containing primitive values)
+                is_2d_matrix = (
+                    len(v) > 0 and 
+                    all(isinstance(row, list) for row in v) and
+                    all(len(row) == len(v[0]) for row in v) and
+                    len(v[0]) > 0 and
+                    all(isinstance(val, (int, float, str, bool)) or val is None for row in v for val in (row[:20] if isinstance(row, list) else []))
+                )
+                
+                if is_2d_matrix:
+                    rows = len(v)
+                    cols = len(v[0])
+                    grid_data = []
+                    for r_idx, row in enumerate(v[:20]):
+                        row_vals = []
+                        for c_idx, val in enumerate(row[:20]):
+                            row_vals.append({
+                                "r": r_idx,
+                                "c": c_idx,
+                                "val": repr(val) if isinstance(val, str) else str(val),
+                                "varName": f"{k}[{r_idx}][{c_idx}]"
+                            })
+                        grid_data.append(row_vals)
+                    
                     objects.append({
-                        "id": f"arr_{k}_{idx}",
-                        "varName": f"{k}[{idx}]",
-                        "label": str(item),
-                        "type": "ArrayCell",
-                        "pyType": "list",
+                        "id": f"matrix_{k}",
+                        "varName": k,
+                        "label": f"{k} ({rows}x{cols})",
+                        "type": "MatrixGrid",
+                        "pyType": "2D List Matrix",
                         "pyId": f"0x{id(v):x}",
-                        "isImmutable": False,
+                        "rows": rows,
+                        "cols": cols,
+                        "data": grid_data,
                         "color": "#6366F1"
                     })
+                else:
+                    for idx, item in enumerate(v[:50]):
+                        objects.append({
+                            "id": f"arr_{k}_{idx}",
+                            "varName": f"{k}[{idx}]",
+                            "label": str(item),
+                            "type": "ArrayCell",
+                            "pyType": "list",
+                            "pyId": f"0x{id(v):x}",
+                            "isImmutable": False,
+                            "color": "#6366F1"
+                        })
             elif isinstance(v, set):
                 for idx, item in enumerate(sorted(list(v))[:50]):
                     objects.append({
@@ -1511,6 +1548,18 @@ json.dumps({
                     p.y = currentY + Math.floor(idx / 4) * 50;
                 });
                 currentY += Math.ceil(groupObjects.length / 4) * 50 + 40;
+            } else if (firstType === "MatrixGrid") {
+                groupObjects.forEach((mat) => {
+                    const cellW = 46;
+                    const cellH = 34;
+                    const gridW = mat.cols * cellW;
+                    const gridH = mat.rows * cellH;
+                    mat.width = gridW + 60;
+                    mat.height = gridH + 50;
+                    mat.x = (this.canvas.width / 2) || 400;
+                    mat.y = currentY + gridH / 2 + 25;
+                    currentY += mat.height + 40;
+                });
             } else if (firstType === "ArrayCell" || firstType === "DictBucket") {
                 groupObjects.forEach((cell, idx) => {
                     cell.x = startX + (idx % 10) * 70;
@@ -2060,6 +2109,90 @@ json.dumps({
                 this.ctx.textAlign = "center";
                 this.ctx.textBaseline = "middle";
                 this.ctx.fillText(entity.label, entity.x, entity.y);
+            } else if (entity.type === "MatrixGrid") {
+                const rows = entity.rows || 0;
+                const cols = entity.cols || 0;
+                const cellW = 46;
+                const cellH = 34;
+                const totalW = cols * cellW;
+                const totalH = rows * cellH;
+
+                const startX = renderX - totalW / 2;
+                const startY = renderY - totalH / 2 + 10;
+
+                this.ctx.save();
+
+                // Outer Glass Container Card
+                this.ctx.fillStyle = "rgba(18, 24, 38, 0.88)";
+                this.ctx.beginPath();
+                this.ctx.roundRect(startX - 36, startY - 32, totalW + 50, totalH + 46, 10);
+                this.ctx.fill();
+                this.ctx.strokeStyle = isSelected ? "#6366F1" : "rgba(99, 102, 241, 0.4)";
+                this.ctx.lineWidth = isSelected ? 2.5 : 1.5;
+                this.ctx.stroke();
+
+                // Matrix Title Badge (e.g. "matrix [5x5]")
+                this.ctx.fillStyle = "#818CF8";
+                this.ctx.font = "700 12px Fira Code, monospace";
+                this.ctx.textAlign = "left";
+                this.ctx.textBaseline = "middle";
+                this.ctx.fillText(`📊 ${entity.varName} [${rows}×${cols}]`, startX - 24, startY - 16);
+
+                // Column Header Indices (c0, c1, c2...)
+                this.ctx.font = "600 10px Fira Code, monospace";
+                this.ctx.fillStyle = "#94A3B8";
+                this.ctx.textAlign = "center";
+                for (let c = 0; c < cols; c++) {
+                    const cx = startX + c * cellW + cellW / 2;
+                    this.ctx.fillText(`c${c}`, cx, startY - 5);
+                }
+
+                // Render Cells with Row Header Indices (r0, r1, r2...)
+                for (let r = 0; r < rows; r++) {
+                    const ry = startY + r * cellH;
+                    
+                    // Row Header Index
+                    this.ctx.font = "600 10px Fira Code, monospace";
+                    this.ctx.fillStyle = "#94A3B8";
+                    this.ctx.textAlign = "right";
+                    this.ctx.fillText(`r${r}`, startX - 8, ry + cellH / 2);
+
+                    const rowData = entity.data ? entity.data[r] : [];
+                    for (let c = 0; c < cols; c++) {
+                        const rx = startX + c * cellW;
+                        const cellItem = rowData ? rowData[c] : null;
+                        const cellVal = cellItem ? cellItem.val : "";
+
+                        const isCellSelected = this.selectedMatrixCell && 
+                            this.selectedMatrixCell.matrixId === entity.id && 
+                            this.selectedMatrixCell.r === r && 
+                            this.selectedMatrixCell.c === c;
+
+                        this.ctx.beginPath();
+                        this.ctx.roundRect(rx + 2, ry + 2, cellW - 4, cellH - 4, 4);
+
+                        if (isCellSelected) {
+                            this.ctx.fillStyle = "rgba(99, 102, 241, 0.5)";
+                            this.ctx.strokeStyle = "#818CF8";
+                            this.ctx.lineWidth = 2;
+                        } else {
+                            this.ctx.fillStyle = "rgba(30, 41, 59, 0.9)";
+                            this.ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+                            this.ctx.lineWidth = 1;
+                        }
+                        this.ctx.fill();
+                        this.ctx.stroke();
+
+                        // Cell Value
+                        this.ctx.fillStyle = isCellSelected ? "#FFFFFF" : "#F1F5F9";
+                        this.ctx.font = "600 12px Fira Code, monospace";
+                        this.ctx.textAlign = "center";
+                        this.ctx.textBaseline = "middle";
+                        this.ctx.fillText(String(cellVal), rx + cellW / 2, ry + cellH / 2);
+                    }
+                }
+
+                this.ctx.restore();
             } else {
                 this.ctx.beginPath();
                 this.ctx.arc(entity.x, entity.y, 22, 0, Math.PI * 2);
@@ -2088,33 +2221,101 @@ json.dumps({
         const mouseY = (rawMouseY - this.panY) / this.zoomScale;
 
         let clickedEntity = null;
+        let clickedMatrixCell = null;
+
         this.entities.forEach(entity => {
-            const dist = Math.hypot(entity.x - mouseX, entity.y - mouseY);
-            if (dist <= 25) {
-                clickedEntity = entity;
+            if (entity.type === "MatrixGrid") {
+                const rows = entity.rows || 0;
+                const cols = entity.cols || 0;
+                const cellW = 46;
+                const cellH = 34;
+                const totalW = cols * cellW;
+                const totalH = rows * cellH;
+                const startX = entity.x - totalW / 2;
+                const startY = entity.y - totalH / 2 + 10;
+
+                if (mouseX >= startX - 36 && mouseX <= startX + totalW + 20 &&
+                    mouseY >= startY - 32 && mouseY <= startY + totalH + 15) {
+                    clickedEntity = entity;
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            const rx = startX + c * cellW;
+                            const ry = startY + r * cellH;
+                            if (mouseX >= rx && mouseX <= rx + cellW && mouseY >= ry && mouseY <= ry + cellH) {
+                                clickedMatrixCell = { matrixId: entity.id, r, c, cellItem: entity.data[r][c] };
+                                break;
+                            }
+                        }
+                    }
+                }
+            } else {
+                const dist = Math.hypot(entity.x - mouseX, entity.y - mouseY);
+                if (dist <= 25) {
+                    clickedEntity = entity;
+                }
             }
         });
 
         if (clickedEntity) {
             this.selectedEntityId = clickedEntity.id;
+            this.selectedMatrixCell = clickedMatrixCell;
             this.showInspector(clickedEntity);
 
-            // Active Line Referencing: Highlight line declaring or modifying this variable
-            if (clickedEntity.varName) {
+            const targetVar = clickedMatrixCell ? clickedMatrixCell.cellItem.varName : clickedEntity.varName;
+            if (targetVar) {
                 const lines = this.codeEditor.value.split('\n');
-                const cleanVar = clickedEntity.varName.split('.')[0].split('[')[0];
+                const cleanVar = targetVar.split('[')[0];
                 const matchedLineIdx = lines.findIndex(l => l.includes(cleanVar));
                 if (matchedLineIdx !== -1) {
                     this.highlightLine(matchedLineIdx + 1);
                 }
             }
         } else {
+            this.selectedMatrixCell = null;
             this.closeInspector();
         }
     }
 
     showInspector(entity) {
         this.inspectorPanel.style.display = 'flex';
+        
+        if (entity.type === "MatrixGrid" && this.selectedMatrixCell) {
+            const cell = this.selectedMatrixCell.cellItem;
+            this.inspectorContent.innerHTML = `
+                <div class="dock-section" id="variables-dock">
+                    <div class="dock-section-title">📌 Active Variables</div>
+                    <div class="variables-dock-content" id="variables-dock-content"></div>
+                </div>
+                <div class="dock-section" id="inspector-details">
+                    <div class="dock-section-title">Matrix Cell Inspector</div>
+                    <div class="inspect-item">
+                        <span class="inspect-label">Cell Reference</span>
+                        <span class="inspect-val" style="color: #60A5FA; font-weight: 700;">${cell.varName}</span>
+                    </div>
+                    <div class="inspect-item">
+                        <span class="inspect-label">Cell Value</span>
+                        <span class="inspect-val" style="color: #F59E0B; font-weight: 700;">${cell.val}</span>
+                    </div>
+                    <div class="inspect-item">
+                        <span class="inspect-label">Row Index (r)</span>
+                        <span class="inspect-val">${cell.r}</span>
+                    </div>
+                    <div class="inspect-item">
+                        <span class="inspect-label">Col Index (c)</span>
+                        <span class="inspect-val">${cell.c}</span>
+                    </div>
+                    <div class="inspect-item">
+                        <span class="inspect-label">Grid Dimensions</span>
+                        <span class="inspect-val">${entity.rows} × ${entity.cols}</span>
+                    </div>
+                    <div class="inspect-item">
+                        <span class="inspect-label">CPython Pointer</span>
+                        <span class="inspect-val">${entity.pyId}</span>
+                    </div>
+                </div>
+            `;
+            return;
+        }
         
         let extraInfo = '';
         if (entity.height !== undefined) {
