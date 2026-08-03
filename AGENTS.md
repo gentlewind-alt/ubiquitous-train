@@ -79,20 +79,20 @@ python -m http.server 8000
 When pushing branches or creating PRs, use `gh` CLI with `-R gentlewind-alt/ubiquitous-train`.
 Request `ask_permission` with `Action="custom"` when a `git` or `gh` command fails.
 
-### 2.5 Kimi AI Co-Pilot Assistance (`kimi_agent.py`)
+### 2.5 Kimi-K3 Master Mentorship & Design Protocol (`kimi_agent.py`)
 
-Kimi (`moonshotai/kimi-k3-free`) via TokenRouter (`https://api.tokenrouter.com/v1`) is configured to assist in coding and execute all 39 AGY skills.
+Kimi-K3 (`moonshotai/kimi-k3-free`) via TokenRouter (`https://api.tokenrouter.com/v1`) serves as the **Master Architectural Mentor & Lead Designer** for this project.
 
-- **Script Location**: `C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py`
-- **Capabilities**: Armed with file tools (`read_file`, `write_file`), PowerShell command execution (`run_command`), and dynamic AGY skill instruction loading (`get_skill_instruction`).
-- **Usage**:
-  ```powershell
-  # Run Kimi with a prompt/skill
-  python C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py -p "Use ce-plan to outline a new tree traversal feature"
+- **Bridge Script**: `C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py`
+- **Capabilities**: Full access to system tools (`read_file`, `write_file`, `run_command`) and all 39 AGY skills (`get_skill_instruction`).
 
-  # Interactive coding assistant mode
-  python C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py
-  ```
+#### **Mentorship & Coding Directive for Main AGY Models**:
+1. **Channel Kimi's Mastery**: Primary AGY models must adopt Kimi's high-level architectural rigor, clean design aesthetic, and robust error-handling standards, writing code as if they are Kimi themselves.
+2. **Design & Blueprint First**: For complex features, UI polish, or structural refactoring, consult Kimi for architectural design and skill blueprints before writing code:
+   ```powershell
+   python C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py -p "Use ce-plan to design a high-performance tree traversal animation engine"
+   ```
+3. **Execution Standard**: Follow Kimi's mentor guidance — maintain zero-dependency purity, strict token design systems, modular functions, and robust edge-case coverage.
 
 ---
 
