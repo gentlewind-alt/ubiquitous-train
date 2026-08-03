@@ -53,6 +53,15 @@
                     </select>
                 </div>
 
+                <div class="meta-selector">
+                    <label for="meta-mode-select">View Mode:</label>
+                    <select id="meta-mode-select">
+                        <option value="learning" selected>🎓 Learning (h & bf)</option>
+                        <option value="presentation">🎨 Presentation (Clean)</option>
+                        <option value="debug">🛠️ Debug (Full Pointers)</option>
+                    </select>
+                </div>
+
                 <div class="button-group">
                     <button id="btn-save" class="btn btn-secondary" title="Save python code (Ctrl+S)">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
@@ -146,6 +155,12 @@
 
                     <canvas id="visualizer-canvas"></canvas>
                     
+                    <!-- CURRENT LOCAL VARIABLES DOCK -->
+                    <div class="variables-dock" id="variables-dock" style="display:none;">
+                        <div class="variables-dock-title">📌 Local Variables</div>
+                        <div class="variables-dock-content" id="variables-dock-content"></div>
+                    </div>
+
                     <!-- DEVTOOLS INSPECTOR OVERLAY PANEL -->
                     <aside class="inspector-overlay" id="inspector-panel">
                         <div class="inspector-header">

@@ -127,13 +127,16 @@ class RVEApplication {
         this.algoSelect = document.getElementById('algorithm-select');
         this.speedSelect = document.getElementById('speed-select');
         this.cameraSelect = document.getElementById('camera-mode-select');
+        this.metaSelect = document.getElementById('meta-mode-select');
 
         this.cameraMode = "follow"; // "follow" | "fit" | "selected"
+        this.metaMode = "learning"; // "learning" | "presentation" | "debug"
         this.targetPanX = 0;
         this.targetPanY = 0;
         this.targetZoomScale = 1.0;
         this.isUserDraggingCamera = false;
         this.animProgress = 1.0;
+        this.prevNodePositions = new Map();
         
         this.btnAutosaveToggle = document.getElementById('btn-autosave-toggle');
         this.btnSave = document.getElementById('btn-save');
@@ -224,6 +227,17 @@ class RVEApplication {
                 }
             });
         }
+
+        if (this.metaSelect) {
+            this.metaSelect.addEventListener('change', (e) => {
+                this.metaMode = e.target.value;
+            });
+        }
+
+        // Line Numbers Scroll Synchronization
+        this.codeEditor.addEventListener('scroll', () => {
+            this.lineNumbers.scrollTop = this.codeEditor.scrollTop;
+        });
 
         this.codeEditor.addEventListener('input', () => {
             this.updateLineNumbers();
@@ -1704,6 +1718,24 @@ json.dumps({
             this.showInspector(this.entities.get(this.selectedEntityId));
         }
 
+        // Update Docked Variables Panel
+        const primitiveEntities = Array.from(this.entities.values()).filter(e => e.type === "Primitive");
+        const varDock = document.getElementById('variables-dock');
+        const varDockContent = document.getElementById('variables-dock-content');
+        if (varDock && varDockContent) {
+            if (primitiveEntities.length > 0) {
+                varDock.style.display = 'block';
+                varDockContent.innerHTML = primitiveEntities.map(p => `
+                    <div class="var-dock-item">
+                        <span class="var-dock-name">${p.varName}</span>
+                        <span class="var-dock-val">${p.label.includes('=') ? p.label.split('=').pop().trim() : p.label}</span>
+                    </div>
+                `).join('');
+            } else {
+                varDock.style.display = 'none';
+            }
+        }
+
         // Camera Auto-Tracking Target Update
         this.updateCameraTargetForFrame(frame);
 
@@ -1796,21 +1828,26 @@ json.dumps({
     }
 
     drawLineWithEdgeBadge(x1, y1, x2, y2, label) {
+        const animX2 = x1 + (x2 - x1) * this.animProgress;
+        const animY2 = y1 + (y2 - y1) * this.animProgress;
+
         this.ctx.beginPath();
         this.ctx.moveTo(x1, y1);
-        this.ctx.lineTo(x2, y2);
-        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+        this.ctx.lineTo(animX2, animY2);
+        this.ctx.strokeStyle = label === "L" ? "#EC4899" : "#10B981";
+        this.ctx.lineWidth = 2.2;
         this.ctx.stroke();
 
-        // Edge label badge (L / R)
-        const midX = (x1 + x2) / 2;
-        const midY = (y1 + y2) / 2;
-        
-        this.ctx.fillStyle = label === "L" ? "#EC4899" : "#10B981";
-        this.ctx.font = "700 9px Fira Code, monospace";
-        this.ctx.textAlign = "center";
-        this.ctx.textBaseline = "middle";
-        this.ctx.fillText(label, midX + (label === "L" ? -7 : 7), midY);
+        if (this.animProgress >= 0.75) {
+            const midX = (x1 + x2) / 2;
+            const midY = (y1 + y2) / 2;
+            
+            this.ctx.fillStyle = label === "L" ? "#EC4899" : "#10B981";
+            this.ctx.font = "700 9px Fira Code, monospace";
+            this.ctx.textAlign = "center";
+            this.ctx.textBaseline = "middle";
+            this.ctx.fillText(label, midX + (label === "L" ? -7 : 7), midY);
+        }
     }
 
     drawSelfLoopArc(x, y) {
@@ -1846,12 +1883,31 @@ json.dumps({
 
     // --- DRAW ENTITIES WITH MINIMAL LABELS & HEIGHT/BALANCE BADGES ---
     drawEntities() {
+        // Easing helper
+        const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+        const easeT = easeOutCubic(this.animProgress);
+
         this.entities.forEach(entity => {
+            if (entity.type === "Primitive") return; // Rendered in Docked Variables Panel
+
+            // Calculate interpolated position for smooth movement
+            let renderX = entity.x;
+            let renderY = entity.y;
+            let scaleFactor = 1.0;
+
+            if (this.prevNodePositions && this.prevNodePositions.has(entity.id)) {
+                const prevPos = this.prevNodePositions.get(entity.id);
+                renderX = prevPos.x + (entity.x - prevPos.x) * easeT;
+                renderY = prevPos.y + (entity.y - prevPos.y) * easeT;
+            } else {
+                scaleFactor = easeT;
+            }
+
             const isSelected = entity.id === this.selectedEntityId;
 
             if (isSelected) {
                 this.ctx.beginPath();
-                this.ctx.arc(entity.x, entity.y, 28, 0, Math.PI * 2);
+                this.ctx.arc(renderX, renderY, (28 * scaleFactor), 0, Math.PI * 2);
                 this.ctx.fillStyle = "rgba(99, 102, 241, 0.25)";
                 this.ctx.fill();
                 this.ctx.strokeStyle = "#6366F1";
@@ -1860,46 +1916,55 @@ json.dumps({
             }
 
             if (entity.type === "TreeNode") {
+                const radius = Math.max(1, 20 * scaleFactor);
+
                 this.ctx.beginPath();
-                this.ctx.arc(entity.x, entity.y, 20, 0, Math.PI * 2);
+                this.ctx.arc(renderX, renderY, radius, 0, Math.PI * 2);
                 this.ctx.fillStyle = entity.color || "#6366F1";
                 this.ctx.fill();
                 this.ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
                 this.ctx.lineWidth = 2;
                 this.ctx.stroke();
 
-                // Minimal Clean Value Label (e.g. "50")
-                this.ctx.fillStyle = "#FFFFFF";
-                this.ctx.font = "700 13px Fira Code, monospace";
-                this.ctx.textAlign = "center";
-                this.ctx.textBaseline = "middle";
-                this.ctx.fillText(entity.label, entity.x, entity.y);
-
-                // Height & Balance Factor Micro Badge (e.g. "h=3 bf=0")
-                if (entity.height !== undefined) {
-                    this.ctx.fillStyle = "#94A3B8";
-                    this.ctx.font = "600 9px Fira Code, monospace";
+                if (scaleFactor > 0.4) {
+                    this.ctx.fillStyle = "#FFFFFF";
+                    this.ctx.font = "700 13px Fira Code, monospace";
                     this.ctx.textAlign = "center";
-                    this.ctx.fillText(`h=${entity.height} bf=${entity.balanceFactor ?? 0}`, entity.x, entity.y + 28);
+                    this.ctx.textBaseline = "middle";
+                    this.ctx.fillText(entity.label, renderX, renderY);
+
+                    // Render Metadata based on Mode
+                    if (this.metaMode === "learning" && entity.height !== undefined) {
+                        this.ctx.fillStyle = "#94A3B8";
+                        this.ctx.font = "600 9px Fira Code, monospace";
+                        this.ctx.textAlign = "center";
+                        this.ctx.fillText(`h=${entity.height} bf=${entity.balanceFactor ?? 0}`, renderX, renderY + radius + 10);
+                    } else if (this.metaMode === "debug" && entity.height !== undefined) {
+                        this.ctx.fillStyle = "#F59E0B";
+                        this.ctx.font = "600 8px Fira Code, monospace";
+                        this.ctx.textAlign = "center";
+                        this.ctx.fillText(`${entity.pyId} h=${entity.height}`, renderX, renderY + radius + 10);
+                    }
                 }
             } else if (entity.type === "NaryNode") {
                 const isRoot = entity.isRoot;
                 const isLeaf = entity.isLeaf;
-                const radius = isRoot ? 28 : (isLeaf ? 16 : 22);
+                const baseRadius = isRoot ? 28 : (isLeaf ? 16 : 22);
+                const radius = Math.max(1, baseRadius * scaleFactor);
 
                 this.ctx.save();
 
                 // Root Glow Effect
                 if (isRoot) {
                     this.ctx.beginPath();
-                    this.ctx.arc(entity.x, entity.y, radius + 6, 0, Math.PI * 2);
+                    this.ctx.arc(renderX, renderY, radius + 6, 0, Math.PI * 2);
                     this.ctx.fillStyle = entity.color ? `${entity.color}33` : "rgba(16, 185, 129, 0.25)";
                     this.ctx.fill();
                 }
 
                 // Node Circle
                 this.ctx.beginPath();
-                this.ctx.arc(entity.x, entity.y, radius, 0, Math.PI * 2);
+                this.ctx.arc(renderX, renderY, radius, 0, Math.PI * 2);
 
                 if (isLeaf) {
                     this.ctx.fillStyle = "rgba(30, 41, 59, 0.9)";
@@ -1917,29 +1982,31 @@ json.dumps({
                 this.ctx.fill();
                 this.ctx.stroke();
 
-                // Truncate long labels
-                let displayLabel = entity.label || "";
-                if (displayLabel.length > 11) {
-                    displayLabel = displayLabel.substring(0, 9) + "..";
-                }
-
-                this.ctx.fillStyle = "#FFFFFF";
-                this.ctx.font = isRoot ? "700 13px Fira Code, monospace" : (isLeaf ? "600 10px Fira Code, monospace" : "700 11px Fira Code, monospace");
-                this.ctx.textAlign = "center";
-                this.ctx.textBaseline = "middle";
-                this.ctx.fillText(displayLabel, entity.x, entity.y);
-
-                // Icon & Child Count Badge
-                if (entity.icon) {
-                    let iconText = entity.icon;
-                    if (!isLeaf && entity.childCount > 0) {
-                        iconText = `${entity.icon} (${entity.childCount})`;
+                if (scaleFactor > 0.4) {
+                    // Truncate long labels
+                    let displayLabel = entity.label || "";
+                    if (displayLabel.length > 11) {
+                        displayLabel = displayLabel.substring(0, 9) + "..";
                     }
-                    this.ctx.font = isRoot ? "bold 15px sans-serif" : "13px sans-serif";
-                    this.ctx.fillStyle = "#E2E8F0";
+
+                    this.ctx.fillStyle = "#FFFFFF";
+                    this.ctx.font = isRoot ? "700 13px Fira Code, monospace" : (isLeaf ? "600 10px Fira Code, monospace" : "700 11px Fira Code, monospace");
                     this.ctx.textAlign = "center";
-                    this.ctx.textBaseline = "bottom";
-                    this.ctx.fillText(iconText, entity.x, entity.y - radius - 4);
+                    this.ctx.textBaseline = "middle";
+                    this.ctx.fillText(displayLabel, renderX, renderY);
+
+                    // Icon & Child Count Badge
+                    if (entity.icon) {
+                        let iconText = entity.icon;
+                        if (!isLeaf && entity.childCount > 0) {
+                            iconText = `${entity.icon} (${entity.childCount})`;
+                        }
+                        this.ctx.font = isRoot ? "bold 15px sans-serif" : "13px sans-serif";
+                        this.ctx.fillStyle = "#E2E8F0";
+                        this.ctx.textAlign = "center";
+                        this.ctx.textBaseline = "bottom";
+                        this.ctx.fillText(iconText, renderX, renderY - radius - 4);
+                    }
                 }
 
                 this.ctx.restore();
@@ -2033,6 +2100,16 @@ json.dumps({
         if (clickedEntity) {
             this.selectedEntityId = clickedEntity.id;
             this.showInspector(clickedEntity);
+
+            // Active Line Referencing: Highlight line declaring or modifying this variable
+            if (clickedEntity.varName) {
+                const lines = this.codeEditor.value.split('\n');
+                const cleanVar = clickedEntity.varName.split('.')[0].split('[')[0];
+                const matchedLineIdx = lines.findIndex(l => l.includes(cleanVar));
+                if (matchedLineIdx !== -1) {
+                    this.highlightLine(matchedLineIdx + 1);
+                }
+            }
         } else {
             this.closeInspector();
         }

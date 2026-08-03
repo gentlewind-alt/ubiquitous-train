@@ -92,7 +92,7 @@ body {
     gap: 16px;
 }
 
-.preset-selector, .speed-selector, .camera-selector {
+.preset-selector, .speed-selector, .camera-selector, .meta-selector {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -684,4 +684,52 @@ select:focus {
     flex: 1;
     accent-color: var(--accent-color);
     cursor: pointer;
+}
+
+/* DOCKED LOCAL VARIABLES PANEL */
+.variables-dock {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    background: rgba(18, 24, 38, 0.88);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 14px;
+    max-width: 280px;
+    z-index: 10;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.variables-dock-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.variables-dock-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.var-dock-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Fira Code', monospace;
+    font-size: 11px;
+}
+
+.var-dock-name {
+    color: #F59E0B;
+    font-weight: 600;
+}
+
+.var-dock-val {
+    color: #F1F5F9;
 }
