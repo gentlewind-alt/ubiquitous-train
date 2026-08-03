@@ -236,6 +236,7 @@ class RVEApplication {
         // Line Numbers Scroll Synchronization
         this.codeEditor.addEventListener('scroll', () => {
             this.lineNumbers.scrollTop = this.codeEditor.scrollTop;
+            this.updateLineHighlightBar();
         });
 
         this.codeEditor.addEventListener('input', () => {
@@ -806,9 +807,24 @@ class RVEApplication {
     updateLineNumbers() {
         const lines = this.codeEditor.value.split('\n').length;
         this.lineNumbers.innerHTML = Array.from({ length: lines }, (_, i) => `<span class="line-number" id="line-num-${i+1}">${i + 1}</span>`).join('');
+        this.lineNumbers.scrollTop = this.codeEditor.scrollTop;
+    }
+
+    updateLineHighlightBar() {
+        if (!this.currentActiveLineNo) return;
+        const targetLine = document.getElementById(`line-num-${this.currentActiveLineNo}`);
+        if (targetLine) {
+            const rowHeight = 20.8;
+            const topOffset = 12 + (this.currentActiveLineNo - 1) * rowHeight - this.codeEditor.scrollTop;
+            this.lineHighlightBar.style.top = `${topOffset}px`;
+            this.lineHighlightBar.style.display = 'block';
+        }
     }
 
     highlightLine(lineNo, isError = false) {
+        this.currentActiveLineNo = lineNo;
+        this.isCurrentLineError = isError;
+
         const activeLines = this.lineNumbers.querySelectorAll('.active-line-num');
         activeLines.forEach(el => {
             el.classList.remove('active-line-num');
@@ -825,12 +841,7 @@ class RVEApplication {
             targetLine.classList.add('active-line-num');
             if (isError) targetLine.classList.add('error');
             
-            const rowHeight = 20.8;
-            const lineTop = targetLine.offsetTop - 12;
-            const topOffset = 12 + (lineNo - 1) * rowHeight - this.codeEditor.scrollTop;
-            
-            this.lineHighlightBar.style.top = `${topOffset}px`;
-            this.lineHighlightBar.style.display = 'block';
+            this.updateLineHighlightBar();
 
             if (isError) {
                 this.lineHighlightBar.classList.add('error-bar');
@@ -838,6 +849,8 @@ class RVEApplication {
                 this.lineHighlightBar.classList.remove('error-bar');
             }
 
+            const rowHeight = 20.8;
+            const lineTop = (lineNo - 1) * rowHeight;
             const editorHeight = this.codeEditor.clientHeight || 300;
             const targetScroll = Math.max(0, lineTop - editorHeight / 2 + 15);
             
@@ -1022,6 +1035,82 @@ def capture_snapshot(line_no):
 
         return obj_data["id"]
 
+    def inspect_compound(val, name="", depth=0):
+        if val is None or callable(val) or depth > 6:
+            return None
+            
+        cls_name = type(val).__name__
+        val_id = f"py_0x{id(val):x}"
+        
+        if id(val) in seen_ids:
+            return val_id
+            
+        if isinstance(val, dict):
+            seen_ids.add(id(val))
+            entries = []
+            for dk, dv in list(val.items())[:20]:
+                is_comp = isinstance(dv, (dict, list, tuple, set)) or (hasattr(dv, '__dict__') and not callable(dv))
+                if is_comp and dv is not None and not isinstance(dv, (int, float, str, bool)):
+                    child_id = inspect_compound(dv, f"{name}['{dk}']" if name else str(dk), depth + 1)
+                    entries.append({
+                        "key": str(dk),
+                        "ref": child_id or f"py_0x{id(dv):x}",
+                        "val": None,
+                        "isCompound": True
+                    })
+                else:
+                    entries.append({
+                        "key": str(dk),
+                        "ref": None,
+                        "val": repr(dv) if isinstance(dv, str) else str(dv),
+                        "isCompound": False
+                    })
+            objects.append({
+                "id": val_id,
+                "varName": name or "dict",
+                "label": name or "dict",
+                "type": "DictContainer",
+                "pyType": "dict",
+                "pyId": f"0x{id(val):x}",
+                "entries": entries,
+                "color": "#EC4899"
+            })
+            return val_id
+        elif isinstance(val, list):
+            seen_ids.add(id(val))
+            elements = []
+            for idx, elem in enumerate(val[:20]):
+                is_c = isinstance(elem, (dict, list, tuple, set)) or (hasattr(elem, '__dict__') and not callable(elem))
+                if is_c and elem is not None and not isinstance(elem, (int, float, str, bool)):
+                    child_id = inspect_compound(elem, f"{name}[{idx}]" if name else f"[{idx}]", depth + 1)
+                    elements.append({
+                        "index": idx,
+                        "ref": child_id or f"py_0x{id(elem):x}",
+                        "val": None,
+                        "isCompound": True
+                    })
+                else:
+                    elements.append({
+                        "index": idx,
+                        "ref": None,
+                        "val": repr(elem) if isinstance(elem, str) else str(elem),
+                        "isCompound": False
+                    })
+            objects.append({
+                "id": val_id,
+                "varName": name or "list",
+                "label": name or "list",
+                "type": "ListContainer",
+                "pyType": "list",
+                "pyId": f"0x{id(val):x}",
+                "elements": elements,
+                "color": "#6366F1"
+            })
+            return val_id
+        elif hasattr(val, '__dict__') or hasattr(val, '__slots__'):
+            return inspect_obj(val, name)
+        return None
+
     for k, v in list(user_globals.items()):
         if not k.startswith('__') and not callable(v) and not isinstance(v, type):
             cls_name = type(v).__name__
@@ -1039,17 +1128,16 @@ def capture_snapshot(line_no):
                     "color": "#F59E0B"
                 })
             elif isinstance(v, tuple):
-                for idx, item in enumerate(v[:50]):
-                    objects.append({
-                        "id": f"tup_{k}_{idx}",
-                        "varName": f"{k}[{idx}]",
-                        "label": str(item),
-                        "type": "DictBucket",
-                        "pyType": "tuple",
-                        "pyId": f"0x{id(v):x}",
-                        "isImmutable": True,
-                        "color": "#8B5CF6"
-                    })
+                objects.append({
+                    "id": f"tup_{k}",
+                    "varName": k,
+                    "type": "TupleContainer",
+                    "pyType": "tuple",
+                    "pyId": f"0x{id(v):x}",
+                    "isImmutable": True,
+                    "color": "#8B5CF6",
+                    "elements": [repr(item) if isinstance(item, str) else str(item) for item in v[:20]]
+                })
             elif isinstance(v, list):
                 # Detect 2D Rectangular Matrix (nested list of equal length containing primitive values)
                 is_2d_matrix = (
@@ -1059,6 +1147,8 @@ def capture_snapshot(line_no):
                     len(v[0]) > 0 and
                     all(isinstance(val, (int, float, str, bool)) or val is None for row in v for val in (row[:20] if isinstance(row, list) else []))
                 )
+                
+                has_compound = any(isinstance(item, (dict, list, tuple, set)) or (hasattr(item, '__dict__') and not callable(item)) for item in v[:20])
                 
                 if is_2d_matrix:
                     rows = len(v)
@@ -1087,6 +1177,8 @@ def capture_snapshot(line_no):
                         "data": grid_data,
                         "color": "#6366F1"
                     })
+                elif has_compound:
+                    inspect_compound(v, k)
                 else:
                     for idx, item in enumerate(v[:50]):
                         objects.append({
@@ -1112,19 +1204,23 @@ def capture_snapshot(line_no):
                         "color": "#10B981"
                     })
             elif isinstance(v, dict):
-                idx = 0
-                for dk, dv in list(v.items())[:20]:
-                    objects.append({
-                        "id": f"dict_{k}_{idx}",
-                        "varName": f"{k}['{dk}']",
-                        "label": f"{dk}: {dv}",
-                        "type": "DictBucket",
-                        "pyType": "dict",
-                        "pyId": f"0x{id(v):x}",
-                        "isImmutable": False,
-                        "color": "#EC4899"
-                    })
-                    idx += 1
+                has_compound = any(isinstance(dv, (dict, list, tuple, set)) or (hasattr(dv, '__dict__') and not callable(dv)) for dv in v.values())
+                if has_compound:
+                    inspect_compound(v, k)
+                else:
+                    idx = 0
+                    for dk, dv in list(v.items())[:20]:
+                        objects.append({
+                            "id": f"dict_{k}_{idx}",
+                            "varName": f"{k}['{dk}']",
+                            "label": f"{dk}: {dv}",
+                            "type": "DictBucket",
+                            "pyType": "dict",
+                            "pyId": f"0x{id(v):x}",
+                            "isImmutable": False,
+                            "color": "#EC4899"
+                        })
+                        idx += 1
             else:
                 head = getattr(v, 'root', getattr(v, 'head', v))
                 inspect_obj(head, k)
@@ -1525,8 +1621,27 @@ json.dumps({
             activeObjects = objects.filter(o => !(o.type === "Primitive" && (o.varName === "root" || o.varName.startsWith("t"))));
         }
 
+        const expandedObjects = [];
+        activeObjects.forEach(obj => {
+            if (obj.type === "TupleContainer") {
+                expandedObjects.push({
+                    id: `var_${obj.id}`,
+                    type: "VariableRef",
+                    label: obj.varName || "point",
+                    targetId: obj.id,
+                    isImmutable: true
+                });
+                expandedObjects.push(obj);
+            } else {
+                expandedObjects.push(obj);
+            }
+        });
+        activeObjects = expandedObjects;
+
         const varGroups = new Map();
         activeObjects.forEach(obj => {
+            if (obj.type === "TupleContainer") return; // Positioned dynamically with its VariableRef
+            
             let groupKey = obj.varName ? obj.varName.split('[')[0].split('{')[0].split('.')[0] : obj.type;
             if (!varGroups.has(groupKey)) {
                 varGroups.set(groupKey, []);
@@ -1548,6 +1663,27 @@ json.dumps({
                     p.y = currentY + Math.floor(idx / 4) * 50;
                 });
                 currentY += Math.ceil(groupObjects.length / 4) * 50 + 40;
+            } else if (firstType === "VariableRef") {
+                groupObjects.forEach((vRef) => {
+                    const target = activeObjects.find(o => o.id === vRef.targetId);
+                    const elemCount = (target && target.elements) ? target.elements.length : 2;
+                    const totalH = Math.max(48, 24 * (elemCount + 1));
+                    const centerY = currentY + totalH / 2;
+                    
+                    this.ctx.font = "600 11px Fira Code, monospace";
+                    const textWidth = this.ctx.measureText(vRef.label).width || 40;
+                    vRef.width = Math.max(60, textWidth + 24);
+                    
+                    vRef.x = 80; // Variable Rail
+                    vRef.y = centerY;
+                    
+                    if (target) {
+                        target.x = 260; // Heap rail
+                        target.y = centerY;
+                    }
+                    
+                    currentY += totalH + 30;
+                });
             } else if (firstType === "MatrixGrid") {
                 groupObjects.forEach((mat) => {
                     const cellW = 46;
@@ -1560,6 +1696,60 @@ json.dumps({
                     mat.y = currentY + gridH / 2 + 25;
                     currentY += mat.height + 40;
                 });
+            } else if (firstType === "DictContainer" || firstType === "ListContainer") {
+                const getContainerHeight = (c) => {
+                    const count = (c.entries ? c.entries.length : (c.elements ? c.elements.length : 1));
+                    return 28 + Math.max(1, count) * 24;
+                };
+
+                const childToParent = new Map();
+                groupObjects.forEach(obj => {
+                    const refs = [];
+                    if (obj.entries) obj.entries.forEach(e => { if (e.ref) refs.push(e.ref); });
+                    if (obj.elements) obj.elements.forEach(e => { if (e.ref) refs.push(e.ref); });
+                    refs.forEach(r => childToParent.set(r, obj.id));
+                });
+
+                const levels = new Map();
+                const getLevel = (id, visited = new Set()) => {
+                    if (visited.has(id)) return 0;
+                    visited.add(id);
+                    if (levels.has(id)) return levels.get(id);
+                    if (!childToParent.has(id)) {
+                        levels.set(id, 0);
+                        return 0;
+                    }
+                    const parentId = childToParent.get(id);
+                    const lvl = getLevel(parentId, visited) + 1;
+                    levels.set(id, lvl);
+                    return lvl;
+                };
+
+                groupObjects.forEach(obj => getLevel(obj.id));
+
+                const levelColumns = new Map();
+                groupObjects.forEach(obj => {
+                    const lvl = levels.get(obj.id) || 0;
+                    if (!levelColumns.has(lvl)) levelColumns.set(lvl, []);
+                    levelColumns.get(lvl).push(obj);
+                });
+
+                let maxColY = currentY;
+                levelColumns.forEach((colObjects, lvl) => {
+                    let colY = currentY;
+                    const colX = startX + lvl * 240;
+                    colObjects.forEach(obj => {
+                        const h = getContainerHeight(obj);
+                        obj.x = colX + 90;
+                        obj.y = colY + h / 2;
+                        obj.width = 180;
+                        obj.height = h;
+                        colY += h + 25;
+                    });
+                    if (colY > maxColY) maxColY = colY;
+                });
+
+                currentY = maxColY + 40;
             } else if (firstType === "ArrayCell" || firstType === "DictBucket") {
                 groupObjects.forEach((cell, idx) => {
                     cell.x = startX + (idx % 10) * 70;
@@ -1871,6 +2061,50 @@ json.dumps({
                 const target = this.entities.get(entity.manager);
                 this.drawArrow(entity.x, entity.y - 20, target.x, target.y + 20);
             }
+            if (entity.type === "VariableRef" && this.entities.has(entity.targetId)) {
+                const target = this.entities.get(entity.targetId);
+                const rectW = entity.width || 60;
+                const startX = entity.x + rectW / 2;
+                const startY = entity.y;
+                
+                const endX = target.x - 80;
+                const endY = target.y;
+                
+                this.ctx.strokeStyle = "#60A5FA";
+                this.ctx.lineWidth = 2.2;
+                this.drawArrow(startX, startY, endX, endY, "#60A5FA");
+            }
+            if (entity.refAnchors && typeof entity.refAnchors === "object") {
+                Object.entries(entity.refAnchors).forEach(([targetId, anchor]) => {
+                    if (this.entities.has(targetId)) {
+                        const target = this.entities.get(targetId);
+                        const targetW = target.width || 180;
+                        const startX = anchor.x;
+                        const startY = anchor.y;
+                        const endX = target.x - targetW / 2;
+                        const endY = target.y;
+                        
+                        const edgeColor = entity.type === "DictContainer" ? "#EC4899" : "#6366F1";
+                        this.ctx.strokeStyle = edgeColor;
+                        this.ctx.lineWidth = 2.0;
+                        
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(startX, startY);
+                        const cp1x = startX + (endX - startX) * 0.4;
+                        const cp2x = startX + (endX - startX) * 0.6;
+                        this.ctx.bezierCurveTo(cp1x, startY, cp2x, endY, endX, endY);
+                        this.ctx.stroke();
+                        
+                        const headlen = 7;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(endX, endY);
+                        this.ctx.lineTo(endX - headlen, endY - 4);
+                        this.ctx.lineTo(endX - headlen, endY + 4);
+                        this.ctx.fillStyle = edgeColor;
+                        this.ctx.fill();
+                    }
+                });
+            }
         });
     }
 
@@ -1912,7 +2146,7 @@ json.dumps({
         this.ctx.fill();
     }
 
-    drawArrow(x1, y1, x2, y2) {
+    drawArrow(x1, y1, x2, y2, color = "rgba(255, 255, 255, 0.4)") {
         this.ctx.beginPath();
         this.ctx.moveTo(x1, y1);
         this.ctx.lineTo(x2, y2);
@@ -1924,7 +2158,7 @@ json.dumps({
         this.ctx.moveTo(x2, y2);
         this.ctx.lineTo(x2 - headlen * Math.cos(angle - Math.PI / 6), y2 - headlen * Math.sin(angle - Math.PI / 6));
         this.ctx.lineTo(x2 - headlen * Math.cos(angle + Math.PI / 6), y2 - headlen * Math.sin(angle + Math.PI / 6));
-        this.ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+        this.ctx.fillStyle = color;
         this.ctx.fill();
     }
 
@@ -1962,7 +2196,112 @@ json.dumps({
                 this.ctx.stroke();
             }
 
-            if (entity.type === "TreeNode") {
+            if (entity.type === "VariableRef") {
+                this.ctx.save();
+                
+                // Draw rounded rectangle variable badge
+                this.ctx.fillStyle = "rgba(30, 41, 59, 0.9)";
+                this.ctx.strokeStyle = "#60A5FA";
+                this.ctx.lineWidth = 1.5;
+                this.ctx.beginPath();
+                this.ctx.font = "600 11px Fira Code, monospace";
+                const textWidth = this.ctx.measureText(entity.label).width || 40;
+                const padW = 12;
+                const rectW = entity.width || Math.max(60, textWidth + padW * 2);
+                const rectH = 28;
+                
+                this.ctx.roundRect(renderX - rectW / 2, renderY - rectH / 2, rectW, rectH, 6);
+                this.ctx.fill();
+                this.ctx.stroke();
+                
+                // Text label
+                this.ctx.fillStyle = "#60A5FA";
+                this.ctx.font = "600 11px Fira Code, monospace";
+                this.ctx.textAlign = "center";
+                this.ctx.textBaseline = "middle";
+                this.ctx.fillText(entity.label, renderX, renderY);
+                
+                this.ctx.restore();
+            } else if (entity.type === "TupleContainer") {
+                const elements = entity.elements || [];
+                const rowH = 24;
+                const headerH = 24;
+                const totalH = headerH + rowH * elements.length;
+                const width = 160;
+                
+                const startX = renderX - width / 2;
+                const startY = renderY - totalH / 2;
+                
+                this.ctx.save();
+                
+                // Outer container rounded rect
+                this.ctx.fillStyle = "rgba(18, 24, 38, 0.88)";
+                this.ctx.beginPath();
+                this.ctx.roundRect(startX, startY, width, totalH, 8);
+                this.ctx.fill();
+                this.ctx.strokeStyle = entity.color || "#8B5CF6";
+                this.ctx.lineWidth = isSelected ? 2.5 : 1.8;
+                this.ctx.stroke();
+                
+                // Header background
+                this.ctx.fillStyle = "rgba(139, 92, 246, 0.15)";
+                this.ctx.beginPath();
+                this.ctx.roundRect(startX, startY, width, headerH, [8, 8, 0, 0]);
+                this.ctx.fill();
+                
+                // Header text "Tuple"
+                this.ctx.fillStyle = "#A78BFA";
+                this.ctx.font = "700 11px Inter, sans-serif";
+                this.ctx.textAlign = "center";
+                this.ctx.textBaseline = "middle";
+                this.ctx.fillText("Tuple", startX + width / 2, startY + headerH / 2);
+                
+                // Line under header
+                this.ctx.beginPath();
+                this.ctx.moveTo(startX, startY + headerH);
+                this.ctx.lineTo(startX + width, startY + headerH);
+                this.ctx.strokeStyle = "rgba(139, 92, 246, 0.4)";
+                this.ctx.stroke();
+                
+                // Draw elements
+                const colDividerX = startX + 40;
+                
+                elements.forEach((elem, idx) => {
+                    const rowY = startY + headerH + idx * rowH;
+                    
+                    // Index (Left column)
+                    this.ctx.fillStyle = "#94A3B8";
+                    this.ctx.font = "600 10px Fira Code, monospace";
+                    this.ctx.textAlign = "center";
+                    this.ctx.textBaseline = "middle";
+                    this.ctx.fillText(String(idx), startX + 20, rowY + rowH / 2);
+                    
+                    // Value (Right column)
+                    this.ctx.fillStyle = "#FFFFFF";
+                    this.ctx.font = "500 11px Fira Code, monospace";
+                    this.ctx.textAlign = "center";
+                    this.ctx.textBaseline = "middle";
+                    this.ctx.fillText(String(elem), colDividerX + 60, rowY + rowH / 2);
+                    
+                    // Row divider line (if not last)
+                    if (idx < elements.length - 1) {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(startX, rowY + rowH);
+                        this.ctx.lineTo(startX + width, rowY + rowH);
+                        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+                        this.ctx.stroke();
+                    }
+                });
+                
+                // Column divider vertical line
+                this.ctx.beginPath();
+                this.ctx.moveTo(colDividerX, startY + headerH);
+                this.ctx.lineTo(colDividerX, startY + totalH);
+                this.ctx.strokeStyle = "rgba(139, 92, 246, 0.4)";
+                this.ctx.stroke();
+                
+                this.ctx.restore();
+            } else if (entity.type === "TreeNode") {
                 const radius = Math.max(1, 20 * scaleFactor);
 
                 this.ctx.beginPath();
@@ -2056,6 +2395,111 @@ json.dumps({
                     }
                 }
 
+                this.ctx.restore();
+            } else if (entity.type === "DictContainer" || entity.type === "ListContainer") {
+                const isDict = entity.type === "DictContainer";
+                const items = isDict ? (entity.entries || []) : (entity.elements || []);
+                const rowH = 24;
+                const headerH = 28;
+                const totalH = headerH + Math.max(1, items.length) * rowH;
+                const width = entity.width || 180;
+                
+                const startX = renderX - width / 2;
+                const startY = renderY - totalH / 2;
+                
+                this.ctx.save();
+                
+                // Outer container card
+                this.ctx.fillStyle = "rgba(18, 24, 38, 0.92)";
+                this.ctx.beginPath();
+                this.ctx.roundRect(startX, startY, width, totalH, 8);
+                this.ctx.fill();
+                this.ctx.strokeStyle = isSelected ? "#FFFFFF" : (entity.color || (isDict ? "#EC4899" : "#6366F1"));
+                this.ctx.lineWidth = isSelected ? 2.5 : 1.8;
+                this.ctx.stroke();
+                
+                // Header background
+                this.ctx.fillStyle = isDict ? "rgba(236, 72, 153, 0.2)" : "rgba(99, 102, 241, 0.2)";
+                this.ctx.beginPath();
+                this.ctx.roundRect(startX, startY, width, headerH, [8, 8, 0, 0]);
+                this.ctx.fill();
+                
+                // Header Title
+                this.ctx.fillStyle = isDict ? "#F472B6" : "#818CF8";
+                this.ctx.font = "700 11px Fira Code, monospace";
+                this.ctx.textAlign = "center";
+                this.ctx.textBaseline = "middle";
+                const headerTitle = entity.varName || (isDict ? "{dict}" : "[list]");
+                this.ctx.fillText(headerTitle.length > 22 ? headerTitle.substring(0, 20) + ".." : headerTitle, startX + width / 2, startY + headerH / 2);
+                
+                // Line under header
+                this.ctx.beginPath();
+                this.ctx.moveTo(startX, startY + headerH);
+                this.ctx.lineTo(startX + width, startY + headerH);
+                this.ctx.strokeStyle = isDict ? "rgba(236, 72, 153, 0.4)" : "rgba(99, 102, 241, 0.4)";
+                this.ctx.stroke();
+                
+                // Column divider vertical line
+                const colDividerX = startX + 65;
+                this.ctx.beginPath();
+                this.ctx.moveTo(colDividerX, startY + headerH);
+                this.ctx.lineTo(colDividerX, startY + totalH);
+                this.ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+                this.ctx.stroke();
+                
+                entity.refAnchors = {};
+                
+                items.forEach((item, idx) => {
+                    const rowY = startY + headerH + idx * rowH;
+                    const keyLabel = isDict ? String(item.key) : `[${item.index}]`;
+                    
+                    // Left Column (Key / Index)
+                    this.ctx.fillStyle = "#94A3B8";
+                    this.ctx.font = "600 10px Fira Code, monospace";
+                    this.ctx.textAlign = "center";
+                    this.ctx.textBaseline = "middle";
+                    const truncKey = keyLabel.length > 8 ? keyLabel.substring(0, 7) + ".." : keyLabel;
+                    this.ctx.fillText(truncKey, startX + 32, rowY + rowH / 2);
+                    
+                    // Right Column (Value or Ref Dot)
+                    if (item.isCompound && item.ref) {
+                        const anchorX = startX + width;
+                        const anchorY = rowY + rowH / 2;
+                        entity.refAnchors[item.ref] = { x: anchorX, y: anchorY };
+                        
+                        // Draw Reference Link Dot
+                        this.ctx.beginPath();
+                        this.ctx.arc(startX + 115, anchorY, 4, 0, Math.PI * 2);
+                        this.ctx.fillStyle = isDict ? "#EC4899" : "#6366F1";
+                        this.ctx.fill();
+                        this.ctx.strokeStyle = "#FFFFFF";
+                        this.ctx.lineWidth = 1;
+                        this.ctx.stroke();
+                        
+                        this.ctx.fillStyle = "#CBD5E1";
+                        this.ctx.font = "500 10px Fira Code, monospace";
+                        this.ctx.textAlign = "left";
+                        this.ctx.fillText("ref ➜", startX + 72, anchorY);
+                    } else {
+                        const valStr = String(item.val !== undefined ? item.val : "");
+                        const truncVal = valStr.length > 12 ? valStr.substring(0, 10) + ".." : valStr;
+                        this.ctx.fillStyle = "#F1F5F9";
+                        this.ctx.font = "500 11px Fira Code, monospace";
+                        this.ctx.textAlign = "center";
+                        this.ctx.textBaseline = "middle";
+                        this.ctx.fillText(truncVal, colDividerX + (width - 65) / 2, rowY + rowH / 2);
+                    }
+                    
+                    // Row divider line
+                    if (idx < items.length - 1) {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(startX, rowY + rowH);
+                        this.ctx.lineTo(startX + width, rowY + rowH);
+                        this.ctx.strokeStyle = "rgba(255, 255, 255, 0.06)";
+                        this.ctx.stroke();
+                    }
+                });
+                
                 this.ctx.restore();
             } else if (entity.type === "Primitive") {
                 this.ctx.fillStyle = "rgba(245, 158, 11, 0.15)";
@@ -2248,6 +2692,20 @@ json.dumps({
                         }
                     }
                 }
+            } else if (entity.type === "VariableRef") {
+                const rectW = 60;
+                const rectH = 28;
+                if (mouseX >= entity.x - rectW / 2 && mouseX <= entity.x + rectW / 2 &&
+                    mouseY >= entity.y - rectH / 2 && mouseY <= entity.y + rectH / 2) {
+                    clickedEntity = entity;
+                }
+            } else if (entity.type === "TupleContainer") {
+                const width = 160;
+                const totalH = 24 * ((entity.elements || []).length + 1);
+                if (mouseX >= entity.x - width / 2 && mouseX <= entity.x + width / 2 &&
+                    mouseY >= entity.y - totalH / 2 && mouseY <= entity.y + totalH / 2) {
+                    clickedEntity = entity;
+                }
             } else {
                 const dist = Math.hypot(entity.x - mouseX, entity.y - mouseY);
                 if (dist <= 25) {
@@ -2311,6 +2769,31 @@ json.dumps({
                     <div class="inspect-item">
                         <span class="inspect-label">CPython Pointer</span>
                         <span class="inspect-val">${entity.pyId}</span>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+        
+        if (entity.type === "TupleContainer") {
+            this.inspectorContent.innerHTML = `
+                <div class="dock-section" id="inspector-details">
+                    <div class="dock-section-title">Tuple Inspector</div>
+                    <div class="inspect-item">
+                        <span class="inspect-label">Variable Reference</span>
+                        <span class="inspect-val" style="color: #60A5FA; font-weight: 700;">${entity.varName}</span>
+                    </div>
+                    <div class="inspect-item">
+                        <span class="inspect-label">Type</span>
+                        <span class="inspect-val">${entity.pyType || 'tuple'}</span>
+                    </div>
+                    <div class="inspect-item">
+                        <span class="inspect-label">CPython Pointer</span>
+                        <span class="inspect-val">${entity.pyId}</span>
+                    </div>
+                    <div class="inspect-item">
+                        <span class="inspect-label">Elements Count</span>
+                        <span class="inspect-val">${(entity.elements || []).length}</span>
                     </div>
                 </div>
             `;
