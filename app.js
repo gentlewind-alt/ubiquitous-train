@@ -1137,10 +1137,11 @@ json.dumps({
                         const validRefs = slot.listRefs.filter(refId => objectMap.has(refId));
                         if (validRefs.length > 0) {
                             discoveredChildAttr = slot.attr;
-                            naryRefs = validRefs;
+                            naryRefs.push(...validRefs);
                             hasNaryList = true;
-                            break;
                         }
+                    } else if (slot.ref && objectMap.has(slot.ref)) {
+                        naryRefs.push(slot.ref);
                     }
                 }
             }
@@ -1440,7 +1441,13 @@ json.dumps({
                     const children = profile.childrenMap.get(nodeId) || [];
                     node.children = children;
 
+                    const isRoot = profile.roots.includes(nodeId);
                     const isLeaf = children.length === 0;
+
+                    node.isRoot = isRoot;
+                    node.isLeaf = isLeaf;
+                    node.childCount = children.length;
+
                     node.icon = isLeaf ? profile.leafIcon : profile.icon;
                     node.color = profile.nodeColor || "#6366F1";
                     node.edgeColor = profile.edgeColor || "#4F46E5";
@@ -1455,14 +1462,14 @@ json.dumps({
                             const childAllocatedWidth = availableWidth * childWidthRatio;
                             const childCenterX = currentX + (childAllocatedWidth / 2);
 
-                            positionNaryTree(childId, childCenterX, y + 80, childAllocatedWidth, visitedNodes);
+                            positionNaryTree(childId, childCenterX, y + 85, childAllocatedWidth, visitedNodes);
                             currentX += childAllocatedWidth;
                         });
                     }
                 };
 
                 const totalForestLeaves = profile.roots.map(rId => getSubtreeLeafCount(rId)).reduce((a, b) => a + b, 0);
-                const totalForestWidth = Math.max(totalForestLeaves * 70, Math.min(900, (this.canvas.width || 800) * 0.85));
+                const totalForestWidth = Math.max(totalForestLeaves * 85, Math.min(1100, (this.canvas.width || 800) * 0.9));
 
                 let startForestX = cx - (totalForestWidth / 2);
                 profile.roots.forEach((rootId) => {
@@ -1673,26 +1680,66 @@ json.dumps({
                     this.ctx.fillText(`h=${entity.height} bf=${entity.balanceFactor ?? 0}`, entity.x, entity.y + 28);
                 }
             } else if (entity.type === "NaryNode") {
+                const isRoot = entity.isRoot;
+                const isLeaf = entity.isLeaf;
+                const radius = isRoot ? 28 : (isLeaf ? 16 : 22);
+
+                this.ctx.save();
+
+                // Root Glow Effect
+                if (isRoot) {
+                    this.ctx.beginPath();
+                    this.ctx.arc(entity.x, entity.y, radius + 6, 0, Math.PI * 2);
+                    this.ctx.fillStyle = entity.color ? `${entity.color}33` : "rgba(16, 185, 129, 0.25)";
+                    this.ctx.fill();
+                }
+
+                // Node Circle
                 this.ctx.beginPath();
-                this.ctx.arc(entity.x, entity.y, 22, 0, Math.PI * 2);
-                this.ctx.fillStyle = entity.color || "#6366F1";
+                this.ctx.arc(entity.x, entity.y, radius, 0, Math.PI * 2);
+
+                if (isLeaf) {
+                    this.ctx.fillStyle = "rgba(30, 41, 59, 0.9)";
+                    this.ctx.strokeStyle = entity.color || "#6366F1";
+                    this.ctx.lineWidth = 1.8;
+                } else if (isRoot) {
+                    this.ctx.fillStyle = entity.color || "#10B981";
+                    this.ctx.strokeStyle = "#FFFFFF";
+                    this.ctx.lineWidth = 3;
+                } else {
+                    this.ctx.fillStyle = entity.color || "#6366F1";
+                    this.ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+                    this.ctx.lineWidth = 2;
+                }
                 this.ctx.fill();
-                this.ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-                this.ctx.lineWidth = 2;
                 this.ctx.stroke();
 
+                // Truncate long labels
+                let displayLabel = entity.label || "";
+                if (displayLabel.length > 11) {
+                    displayLabel = displayLabel.substring(0, 9) + "..";
+                }
+
                 this.ctx.fillStyle = "#FFFFFF";
-                this.ctx.font = "700 12px Fira Code, monospace";
+                this.ctx.font = isRoot ? "700 13px Fira Code, monospace" : (isLeaf ? "600 10px Fira Code, monospace" : "700 11px Fira Code, monospace");
                 this.ctx.textAlign = "center";
                 this.ctx.textBaseline = "middle";
-                this.ctx.fillText(entity.label, entity.x, entity.y);
+                this.ctx.fillText(displayLabel, entity.x, entity.y);
 
+                // Icon & Child Count Badge
                 if (entity.icon) {
-                    this.ctx.font = "16px sans-serif";
+                    let iconText = entity.icon;
+                    if (!isLeaf && entity.childCount > 0) {
+                        iconText = `${entity.icon} (${entity.childCount})`;
+                    }
+                    this.ctx.font = isRoot ? "bold 15px sans-serif" : "13px sans-serif";
+                    this.ctx.fillStyle = "#E2E8F0";
                     this.ctx.textAlign = "center";
                     this.ctx.textBaseline = "bottom";
-                    this.ctx.fillText(entity.icon, entity.x, entity.y - 24);
+                    this.ctx.fillText(iconText, entity.x, entity.y - radius - 4);
                 }
+
+                this.ctx.restore();
             } else if (entity.type === "Primitive") {
                 this.ctx.fillStyle = "rgba(245, 158, 11, 0.15)";
                 this.ctx.beginPath();
