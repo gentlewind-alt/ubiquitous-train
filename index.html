@@ -24,8 +24,8 @@
             </div>
 
             <div class="controls-bar">
-                <div class="preset-selector">
-                    <label for="algorithm-select">Preset:</label>
+                <div class="control-group">
+                    <span class="group-label">Domain Preset</span>
                     <select id="algorithm-select">
                         <option value="none" selected>None (Blank Editor)</option>
                         <option value="filesystem">Filesystem Hierarchy (N-ary Tree)</option>
@@ -34,49 +34,42 @@
                     </select>
                 </div>
 
-                <div class="speed-selector">
-                    <label for="speed-select">Speed:</label>
+                <div class="control-group">
+                    <span class="group-label">Execution</span>
+                    <button id="btn-run" class="btn btn-primary" title="Execute code (Ctrl+Enter)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        Run
+                    </button>
+                    <button id="btn-step-prev" class="btn btn-secondary" title="Step Backward">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+                    </button>
+                    <button id="btn-step-next" class="btn btn-secondary" title="Step Forward">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+                    </button>
+                    <button id="btn-save" class="btn btn-secondary" title="Save python code (Ctrl+S)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                        Save
+                    </button>
+                </div>
+
+                <div class="control-group">
+                    <span class="group-label">Camera & View</span>
+                    <select id="camera-mode-select">
+                        <option value="follow" selected>🎥 Follow Execution</option>
+                        <option value="fit">🔍 Fit Scene</option>
+                        <option value="selected">🎯 Selected Node</option>
+                    </select>
+                    <select id="meta-mode-select">
+                        <option value="learning" selected>🎓 Learning (h & bf)</option>
+                        <option value="presentation">🎨 Presentation (Clean)</option>
+                        <option value="debug">🛠️ Debug (Full Pointers)</option>
+                    </select>
                     <select id="speed-select">
                         <option value="0.25">Slow</option>
                         <option value="0.5" selected>Normal</option>
                         <option value="1.0">Fast</option>
                         <option value="2.0">Very Fast</option>
                     </select>
-                </div>
-
-                <div class="camera-selector">
-                    <label for="camera-mode-select">Camera:</label>
-                    <select id="camera-mode-select">
-                        <option value="follow" selected>🎥 Follow Execution</option>
-                        <option value="fit">🔍 Fit Scene</option>
-                        <option value="selected">🎯 Selected Node</option>
-                    </select>
-                </div>
-
-                <div class="meta-selector">
-                    <label for="meta-mode-select">View Mode:</label>
-                    <select id="meta-mode-select">
-                        <option value="learning" selected>🎓 Learning (h & bf)</option>
-                        <option value="presentation">🎨 Presentation (Clean)</option>
-                        <option value="debug">🛠️ Debug (Full Pointers)</option>
-                    </select>
-                </div>
-
-                <div class="button-group">
-                    <button id="btn-save" class="btn btn-secondary" title="Save python code (Ctrl+S)">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-                        Save
-                    </button>
-                    <button id="btn-run" class="btn btn-primary" title="Execute code (Requires Save first)">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                        Run Execution
-                    </button>
-                    <button id="btn-step-prev" class="btn btn-secondary" title="Step Backward (Undo)">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
-                    </button>
-                    <button id="btn-step-next" class="btn btn-secondary" title="Step Forward">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
-                    </button>
                     <button id="btn-reset" class="btn btn-secondary">Reset View</button>
                 </div>
             </div>
@@ -147,28 +140,29 @@
                 </div>
 
                 <div class="canvas-viewport" id="canvas-container">
-                    <!-- LINE ACTION EXPLANATION BANNER -->
+                    <!-- SLIM COMPACT EXECUTION BANNER -->
                     <div class="action-banner" id="action-banner">
-                        <span class="action-badge" id="action-line-badge">Line 1</span>
+                        <span class="action-badge" id="action-line-badge">▶ Line 1</span>
                         <span id="action-description">Initial execution state</span>
                     </div>
 
                     <canvas id="visualizer-canvas"></canvas>
                     
-                    <!-- CURRENT LOCAL VARIABLES DOCK -->
-                    <div class="variables-dock" id="variables-dock" style="display:none;">
-                        <div class="variables-dock-title">📌 Local Variables</div>
-                        <div class="variables-dock-content" id="variables-dock-content"></div>
-                    </div>
-
-                    <!-- DEVTOOLS INSPECTOR OVERLAY PANEL -->
-                    <aside class="inspector-overlay" id="inspector-panel">
+                    <!-- DOCKED DEVTOOLS INSPECTOR & LOCAL VARIABLES PANEL -->
+                    <aside class="inspector-dock" id="inspector-panel">
                         <div class="inspector-header">
-                            <h3>DevTools State Inspector</h3>
+                            <h3>🔍 State Inspector & Local Variables</h3>
                             <button id="btn-close-inspector">&times;</button>
                         </div>
                         <div class="inspector-body" id="inspector-content">
-                            <p class="empty-state">Click any node on the canvas to inspect underlying memory, CPython pointers, and ECS components.</p>
+                            <div class="dock-section" id="variables-dock">
+                                <div class="dock-section-title">📌 Active Variables</div>
+                                <div class="variables-dock-content" id="variables-dock-content"></div>
+                            </div>
+                            <div class="dock-section" id="inspector-details">
+                                <div class="dock-section-title">Memory & Attributes</div>
+                                <p class="empty-state">Click any node on the canvas to inspect memory address and attributes.</p>
+                            </div>
                         </div>
                     </aside>
                 </div>

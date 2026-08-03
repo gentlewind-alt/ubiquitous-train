@@ -828,6 +828,7 @@ class RVEApplication {
             if (isError) targetLine.classList.add('error');
             
             const rowHeight = 20.8;
+            const lineTop = targetLine.offsetTop - 12;
             const topOffset = 12 + (lineNo - 1) * rowHeight - this.codeEditor.scrollTop;
             
             this.lineHighlightBar.style.top = `${topOffset}px`;
@@ -839,12 +840,11 @@ class RVEApplication {
                 this.lineHighlightBar.classList.remove('error-bar');
             }
 
-            const editorHeight = this.codeEditor.clientHeight;
-            const lineTop = targetLine.offsetTop - 12;
-            if (lineTop < this.codeEditor.scrollTop || lineTop > this.codeEditor.scrollTop + editorHeight - 40) {
-                this.codeEditor.scrollTop = lineTop - editorHeight / 2;
-                this.lineNumbers.scrollTop = this.codeEditor.scrollTop;
-            }
+            const editorHeight = this.codeEditor.clientHeight || 300;
+            const targetScroll = Math.max(0, lineTop - editorHeight / 2 + 15);
+            
+            this.codeEditor.scrollTo({ top: targetScroll, behavior: 'smooth' });
+            this.lineNumbers.scrollTop = this.codeEditor.scrollTop;
         }
     }
 
@@ -1499,7 +1499,7 @@ json.dumps({
             varGroups.get(groupKey).push(obj);
         });
 
-        let currentY = 90;
+        let currentY = 40;
         const startX = 100;
 
         varGroups.forEach((groupObjects, groupKey) => {
