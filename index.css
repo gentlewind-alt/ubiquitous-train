@@ -372,6 +372,13 @@ select:focus {
     font-weight: 600;
 }
 
+.execution-group {
+    background: transparent;
+    border: none;
+    padding: 0;
+    gap: 6px;
+}
+
 .panel-title {
     display: flex;
     align-items: center;

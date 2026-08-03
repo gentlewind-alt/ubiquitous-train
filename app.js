@@ -124,7 +124,6 @@ class RVEApplication {
         this.canvas = document.getElementById('visualizer-canvas');
         this.ctx = this.canvas.getContext('2d');
         
-        this.algoSelect = document.getElementById('algorithm-select');
         this.speedSelect = document.getElementById('speed-select');
         this.cameraSelect = document.getElementById('camera-mode-select');
         this.metaSelect = document.getElementById('meta-mode-select');
@@ -324,7 +323,6 @@ class RVEApplication {
             }
         });
         
-        this.algoSelect.addEventListener('change', (e) => this.loadPreset(e.target.value));
         this.btnSave.addEventListener('click', () => this.saveCode());
         this.btnRun.addEventListener('click', () => this.runExecution({ autoPlay: true }));
         this.btnTimelinePlay.addEventListener('click', () => this.togglePlay());
