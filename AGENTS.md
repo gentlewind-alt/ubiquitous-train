@@ -203,10 +203,10 @@ Kimi-K3 (`moonshotai/kimi-k3-free`) via TokenRouter (`https://api.tokenrouter.co
 - **Bridge Script**: `C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py`
 - **Capabilities**: Full access to system tools (`read_file`, `write_file`, `run_command`) and all 39 AGY skills (`get_skill_instruction`).
 
-### Allocation & Scoping Policy
-- **Use Kimi-K3 For**: Major architecture, renderer redesign, semantic engine, layout engine, animation engine, large refactors, cross-system debugging.
-- **Avoid Kimi-K3 For**: Small bug fixes, variable renaming, formatting, minor CSS, simple utility functions.
-- **Workflow**: Use Kimi to design → Use AGY to implement → Use AGY to iterate → Use Kimi to review.
+### COMPULSORY INVOCATION MANDATE
+- **Mandatory Invocation**: Invoking `kimi_mentor.py` / `kimi_agent.py` is **STRICTLY COMPULSORY** for every non-trivial architectural change, layout design, visual feature implementation, and code review.
+- **Pre-Implementation Mandate**: Agents MUST execute `python kimi_mentor.py` or `python kimi_agent.py` to obtain Kimi's architectural design and skill selection BEFORE writing code.
+- **Post-Implementation Visual Verification Mandate**: Agents MUST execute Kimi Visual Eyes (`python kimi_mentor.py -p "Review visual representation..."`) after writing code to audit visual layout geometry and canvas output.
 
 ### Visual Eyes & Visual Information Protocol (`kimi_agent.py` / `kimi_mentor.py`)
 - **CLI Visual Eyes**: `kimi_mentor.py` / `kimi_agent.py` acts as the **CLI's Visual Eyes** for inspecting visual presentation, canvas rendering outputs, spatial layout bounds, UI aesthetics, and visual structure.

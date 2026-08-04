@@ -72,9 +72,12 @@
 
 ---
 
-## 7. Kimi Visual Eyes Protocol
+## 7. Kimi Visual Eyes & Compulsory Mentorship Protocol
 
 ### Lesson 7.1: Use Kimi Mentor as CLI Visual Eyes for UI & Visual Inspection
 - **Rule**: Whenever evaluating visual layouts, canvas rendering hierarchy, or UI presentation quality, invoke `kimi_mentor.py` / `kimi_agent.py` as the **CLI's Visual Eyes** to audit layout aesthetics, spatial alignment, visual rendering fidelity, and design structure.
+
+### Lesson 7.2: Compulsory Pre & Post Implementation Invocation
+- **Rule**: Invoking `kimi_mentor.py` / `kimi_agent.py` is **STRICTLY COMPULSORY** before implementing any architectural or visual feature (to consult Kimi for design blueprints) and after code edits (to run visual verification and audit checks before commit).
 
 

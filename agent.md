@@ -2,6 +2,9 @@
 
 > **MANDATORY DIRECTIVE FOR EVERY USER REQUEST**:
 > AI agents MUST strictly load, consult, and adhere to [`AGENTS.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/AGENTS.md), [`agent.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/agent.md), and [`LESSONS_LEARNED.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/LESSONS_LEARNED.md) for **every single request** received from the user.
+> 
+> **COMPULSORY KIMI MENTOR INVOCATION DIRECTIVE**:
+> Invocation of `kimi_mentor.py` / `kimi_agent.py` is **STRICTLY COMPULSORY** for every non-trivial feature, visual layout change, renderer update, or architectural modification. No non-trivial change may be committed without Kimi Mentor review and visual verification.
 
 This repository uses **`AGENTS.md`** as the single authoritative engineering specification, **`agent.md`** as the bootstrap manifest, and **`LESSONS_LEARNED.md`** as the continuous learning log.
 
