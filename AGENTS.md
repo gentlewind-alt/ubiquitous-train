@@ -208,12 +208,12 @@ Kimi-K3 (`moonshotai/kimi-k3-free`) via TokenRouter (`https://api.tokenrouter.co
 - **Avoid Kimi-K3 For**: Small bug fixes, variable renaming, formatting, minor CSS, simple utility functions.
 - **Workflow**: Use Kimi to design → Use AGY to implement → Use AGY to iterate → Use Kimi to review.
 
-### Mentorship Directive for Main AGY Models
-1. **Channel Kimi's Mastery**: Primary AGY models must adopt Kimi's high-level architectural rigor, clean design aesthetic, and robust error-handling standards, writing code as if they are Kimi themselves.
-2. **Design & Blueprint First**: Consult Kimi for architectural design and skill blueprints before writing code:
-   ```powershell
-   python C:\Users\samar\.gemini\antigravity-cli\kimi_agent.py -p "Use ce-plan to design a high-performance tree traversal animation engine"
-   ```
+### Visual Eyes & Visual Information Protocol (`kimi_agent.py` / `kimi_mentor.py`)
+- **CLI Visual Eyes**: `kimi_mentor.py` / `kimi_agent.py` acts as the **CLI's Visual Eyes** for inspecting visual presentation, canvas rendering outputs, spatial layout bounds, UI aesthetics, and visual structure.
+- **Visual Auditing Workflow**: Whenever evaluating or verifying visual features (e.g. matrix layout grids, 2D tree diagrams, node colors, animation transitions), consult Kimi as the visual inspector:
+  ```powershell
+  python kimi_mentor.py -p "Review the visual representation and layout geometry of the matrix comprehension canvas"
+  ```
 
 ---
 

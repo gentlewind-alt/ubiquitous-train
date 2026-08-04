@@ -70,4 +70,11 @@
      - Concrete `Tuple` container cards showing indexed slots (`0: 3`, `1: 2`, `2: 6`).
      - Semantic relationship labels (`contains`, `owns`, `references`, `row`, `element`) instead of generic "ref".
 
+---
+
+## 7. Kimi Visual Eyes Protocol
+
+### Lesson 7.1: Use Kimi Mentor as CLI Visual Eyes for UI & Visual Inspection
+- **Rule**: Whenever evaluating visual layouts, canvas rendering hierarchy, or UI presentation quality, invoke `kimi_mentor.py` / `kimi_agent.py` as the **CLI's Visual Eyes** to audit layout aesthetics, spatial alignment, visual rendering fidelity, and design structure.
+
 

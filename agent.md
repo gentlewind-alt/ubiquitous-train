@@ -142,21 +142,21 @@ All AI agents must:
    - **Testing**: Automated performance validation
    - **Verification**: Cross-model confirmation before commit
 
-   ## Python Integration Script
+   ## Python Integration Script & Visual Eyes Directive
 
-   The `kimi_mentor.py` provides:
+   The `kimi_mentor.py` serves as the **CLI's Visual Eyes** for reviewing visual information, canvas layouts, UI component aesthetics, and visual rendering fidelity:
    ```python
    async with KimiMentor() as kimi:
-   guidance = await kimi.get_guidance(
-   user_query, 
-   codebase_context
-   )
-   # guidance.recommended_skill contains skill info
+       guidance = await kimi.get_guidance(
+           user_query, 
+           codebase_context
+       )
+       # Used as Visual Eyes to evaluate visual layouts & design quality
    ```
 
    Available methods:
-   - `get_guidance()` - Full architectural review
-   - `get_skill_recommendation()` - Just skill selection
+   - `get_guidance()` - Full architectural & visual review (CLI Visual Eyes)
+   - `get_skill_recommendation()` - Skill selection & visual task mapping
 
    ## Verification Checkpoints
 
