@@ -53,3 +53,21 @@
   6. **Row Builder Buffer**: Show intermediate row assembly before pushing into the main matrix.
   7. **Hierarchical Camera View**: On final step, camera zooms to expose full reference hierarchy (`matrix -> Rows -> Tuples -> Primitive Values`).
 
+---
+
+## 6. The 4-Layer Synchronized Execution Architecture
+
+### Lesson 6.1: Visualization Engine Must Explain Execution, Not Just Memory
+- **Core Principle**: RVE is an **execution explainer**, not a static memory inspector. The engine operates across four synchronized layers:
+  1. **Source Code Layer**: Current line highlighted in Monaco editor frame-by-frame.
+  2. **Runtime State Layer**: Active variables (`i=3`, `j=2`), CPython memory IDs (`id 0x8f42`), and execution state.
+  3. **Semantic Animation Layer**:
+     - **Tuple Construction**: Visual slot-by-slot allocation (`slot 0 <- 3`, `slot 1 <- 2`, `slot 2 <- 6`).
+     - **Operand Computation**: Multiplication / expression evaluation animation (`3 × 2 → 6`).
+     - **Row Builder Buffer**: Temporary row assembly (`Row Builder [] → [(3,0,0)] → ... → append into matrix`).
+     - **Reference Particle Flow**: Glowing particle pulsing through reference slots during indexing lookups (`matrix[3][2]`).
+  4. **Final Object Graph Layer**:
+     - Concrete `Tuple` container cards showing indexed slots (`0: 3`, `1: 2`, `2: 6`).
+     - Semantic relationship labels (`contains`, `owns`, `references`, `row`, `element`) instead of generic "ref".
+
+
