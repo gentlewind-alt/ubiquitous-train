@@ -14,7 +14,7 @@
 | Project       | Runtime Visualization Engine (RVE) Web Studio                        |
 | Stack         | Vanilla HTML / CSS / JavaScript + Pyodide (CPython 3.11 WebAssembly) |
 | Repo          | `https://github.com/gentlewind-alt/ubiquitous-train.git`             |
-| Branch        | `Old_ver` (active working branch)                                     |
+| Branch        | `main` (active working branch)                                        |
 | Local path    | `C:\Users\samar\OneDrive\Desktop\projects\DSA_visualizer`            |
 | Entry points  | `index.html`, `app.js`, `index.css`                                  |
 | Server        | `python -m http.server 8000` → `http://localhost:8000/`              |
