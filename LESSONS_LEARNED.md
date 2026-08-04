@@ -38,3 +38,18 @@
 - **Rule**: Distinguish stdout text stream outputs from heap variable states:
   - **Memory Variables** (`total = 440`, `matrix`) are rendered on the 2D Canvas and Active Variables Overlay.
   - **Text Output Stream (`sys.stdout`)** is logged to the Execution Console / Terminal Panel.
+
+---
+
+## 5. Matrix & Comprehension Educational Visualization Specification
+
+### Lesson 5.1: Expose Comprehension Semantics & Value Flow for 2D Grids
+- **Design Philosophy**: Matrix and 2D comprehension visualizations MUST NOT render as flat opaque list grids. They must expose memory semantics, reference edges, and value flows:
+  1. **Variables Rail to Heap Objects**: Variables (`matrix`, `Row 0`, `Row 1`...) explicitly map to memory objects on the heap rail with reference arrows.
+  2. **Row & Tuple Reference Graph**: Inner lists/rows display reference pointers pointing to element items / tuples (`Tuple (r, c, val)`).
+  3. **Execution Phase Animation**: Step through loop phases (`i` outer -> row creation -> `j` inner -> expression evaluation -> tuple/value creation -> row append -> matrix append).
+  4. **Current Computation Panel**: Display dynamic expression evaluation (`(i,j,i*j) -> (3,2,6) -> Tuple Created -> Appending to Row 3`).
+  5. **Value Flow**: Animate values traveling from loop operands into element/tuple slots.
+  6. **Row Builder Buffer**: Show intermediate row assembly before pushing into the main matrix.
+  7. **Hierarchical Camera View**: On final step, camera zooms to expose full reference hierarchy (`matrix -> Rows -> Tuples -> Primitive Values`).
+
