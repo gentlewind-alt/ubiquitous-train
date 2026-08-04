@@ -50,3 +50,29 @@ Kimi Visual Reviewer NEVER says "looks good". Instead, it explicitly answers:
 | Beginner Friendliness | 8.5/10 | Intuitive card layout with variable labels. |
 - **Overall Score**: **8.25 / 10**
 - **Priority Fixes**: Add animated value particles traveling from loop operands into tuple slots during computation.
+
+---
+
+### Review 2: Graph BFS Traversal & Dual-Engine Canvas Audit (http://localhost:8000/)
+- **Target Code 1 (Graph BFS)**: Adjacency dictionary BFS with `queue` (`deque`), `visited` (`set`), and `heap` (`heapq`).
+- **Target Code 2 (2D Comprehension)**: `[[(i, j, i*j) for j in range(5)] for i in range(5)]`
+
+| Category | Score | Notes |
+|---|:---:|---|
+| Semantic Accuracy | 9.0/10 | Graph DAG levels automatically derived (`A -> B,C -> D,E -> F`). |
+| Runtime Accuracy | 9.5/10 | Real CPython 3.11 evaluation via Pyodide Wasm. |
+| Educational Clarity | 9.0/10 | Dedicated Algorithm Docks (`QueueDock`, `CurrentNodeDock`, `VisitedDock`, `HeapDock`). |
+| Memory Representation | 8.5/10 | Live node state colors (`#F59E0B` Current, `#10B981` Visited, `#38BDF8` Queue). |
+| Layout Quality | 8.5/10 | Level-based BFS tree layout with centered canvas alignment. |
+| Animation Quality | 8.0/10 | Timeline scrubber seeking and active line compilation. |
+| Visual Hierarchy | 9.0/10 | Clear separation between 2D Graph DAG and Algorithm Dock Rail at $y=460$. |
+| Camera Behavior | 8.5/10 | Smooth camera tracking targets active `node` during BFS steps. |
+| Scalability | 9.0/10 | Handles general adjacency graphs, queues, sets, heaps, and matrices. |
+| Beginner Friendliness | 9.0/10 | Instantly explains BFS state mutations and queue pop/append mechanics. |
+
+- **Overall Score**: **8.85 / 10**
+
+#### 🔍 Strict Reviewer Critique: *"What educational concepts are still invisible?"*
+1. **Edge Traversal Pulse**: When `for nxt in graph[node]` executes, the specific directed edge `(node -> nxt)` should pulse with an animated energy line to explain neighbor expansion.
+2. **Value Particle Flow into Heap**: During `heapq.heappush(heap, len(node))`, a value particle should travel from `len(node)` into the `HeapDock`.
+
