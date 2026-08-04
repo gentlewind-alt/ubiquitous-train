@@ -442,6 +442,7 @@ select:focus {
     user-select: none;
     border-right: 1px solid var(--border-color);
     z-index: 2;
+    overflow: hidden;
 }
 
 .line-number {

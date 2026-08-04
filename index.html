@@ -134,19 +134,21 @@
                         <span id="action-description">Initial execution state</span>
                     </div>
 
+                    <!-- FLOATING ACTIVE VARIABLES DOCK (ALWAYS VISIBLE OVERLAY) -->
+                    <div class="variables-dock" id="variables-dock" style="display: none;">
+                        <div class="variables-dock-title">📌 Active Variables</div>
+                        <div class="variables-dock-content" id="variables-dock-content"></div>
+                    </div>
+
                     <canvas id="visualizer-canvas"></canvas>
                     
-                    <!-- DOCKED DEVTOOLS INSPECTOR & LOCAL VARIABLES PANEL -->
+                    <!-- DOCKED DEVTOOLS INSPECTOR PANEL -->
                     <aside class="inspector-dock" id="inspector-panel">
                         <div class="inspector-header">
-                            <h3>🔍 State Inspector & Local Variables</h3>
+                            <h3>🔍 Node Inspector</h3>
                             <button id="btn-close-inspector">&times;</button>
                         </div>
                         <div class="inspector-body" id="inspector-content">
-                            <div class="dock-section" id="variables-dock">
-                                <div class="dock-section-title">📌 Active Variables</div>
-                                <div class="variables-dock-content" id="variables-dock-content"></div>
-                            </div>
                             <div class="dock-section" id="inspector-details">
                                 <div class="dock-section-title">Memory & Attributes</div>
                                 <p class="empty-state">Click any node on the canvas to inspect memory address and attributes.</p>

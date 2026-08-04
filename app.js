@@ -1,7 +1,39 @@
 // --- RVE WEB APPLICATION CORE ENGINE (REINGOLD-TILFORD TREE LAYOUT & AVL SEMANTICS) ---
 
 const PRESETS = {
-    none: "",
+    bfs_depth_tracking: `from collections import deque
+
+# ✅ CORRECTED: Track depth per node using tuples for clean visualization
+graph = {
+    "A": ["B", "C"],
+    "B": ["D"],
+    "C": ["D", "E"],
+    "D": ["F"],
+    "E": ["F"],
+    "F": []
+}
+
+queue = deque([("A", 0)])  # Each item is (node, depth)
+visited = set()
+traversal_order = []
+
+while queue:
+    node, depth = queue.popleft()
+
+    if node in visited:
+        continue
+
+    visited.add(node)
+    traversal_order.append((node, depth))
+
+    for nxt in graph[node]:
+        if nxt not in visited:
+            queue.append((nxt, depth + 1))
+
+# Visualization-ready output with depth information
+for node, depth in traversal_order:
+    print(f"Node: {node}, Depth: {depth}, Visual Y: {depth * 100}px")
+`,
     filesystem: `class Folder:
     def __init__(self, name):
         self.name = name
@@ -445,7 +477,7 @@ class RVEApplication {
 
     loadSavedCodeOnRefresh() {
         // Disabled automatic code restoration from localStorage on refresh to prevent non-responsiveness on large scripts
-        localStorage.removeItem('rve_saved_code');
+        // localStorage.removeItem('rve_saved_code');
         this.updateLineNumbers();
         this.markSaved();
         this.printTerminal("[RVE Engine] Editor ready. Auto-restore on refresh is disabled.", "info");
@@ -1055,6 +1087,11 @@ def capture_snapshot(line_no):
         if isinstance(val, dict):
             seen_ids.add(id(val))
             entries = []
+            is_adj = (len(val) > 0 and all(isinstance(dv, (list, set, tuple)) for dv in val.values()))
+            adj_data = {}
+            if is_adj:
+                for gk, gv in val.items():
+                    adj_data[str(gk)] = [str(x) for x in (gv[:20] if isinstance(gv, (list, set, tuple)) else [])]
             for dk, dv in list(val.items())[:20]:
                 is_comp = isinstance(dv, (dict, list, tuple, set)) or (hasattr(dv, '__dict__') and not callable(dv))
                 if is_comp and dv is not None and not isinstance(dv, (int, float, str, bool)):
@@ -1080,6 +1117,8 @@ def capture_snapshot(line_no):
                 "pyType": "dict",
                 "pyId": f"0x{id(val):x}",
                 "entries": entries,
+                "isAdjacencyGraph": is_adj,
+                "graphData": adj_data if is_adj else None,
                 "color": "#EC4899"
             })
             return val_id
@@ -1624,6 +1663,159 @@ json.dumps({
     solveLayoutConstraintsForObjects(objects) {
         if (!objects || objects.length === 0) return [];
 
+        // --- ADJACENCY GRAPH & ALGORITHM DOCK SOLVER ---
+        const adjDictObj = objects.find(o => o.isAdjacencyGraph && o.graphData);
+        if (adjDictObj && adjDictObj.graphData) {
+            const graphData = adjDictObj.graphData;
+            const allNodes = new Set();
+            Object.keys(graphData).forEach(k => {
+                allNodes.add(k);
+                (graphData[k] || []).forEach(v => allNodes.add(v));
+            });
+
+            const visitedObj = objects.find(o => (o.varName || "").toLowerCase().includes("visited"));
+            const visitedItems = new Set();
+            if (visitedObj) {
+                if (visitedObj.entries) visitedObj.entries.forEach(e => visitedItems.add(String(e.key)));
+                else if (visitedObj.label) visitedObj.label.split(',').forEach(s => visitedItems.add(s.trim()));
+            }
+
+            const nodeObj = objects.find(o => ["node", "curr", "current", "nxt", "next"].includes((o.varName || "").toLowerCase()));
+            let currentNode = null;
+            if (nodeObj) {
+                const rawVal = String(nodeObj.label || "");
+                currentNode = rawVal.includes('=') ? rawVal.split('=').pop().trim().replace(/['"]/g, '') : rawVal.replace(/['"]/g, '');
+            }
+
+            const queueObj = objects.find(o => (o.varName || "").toLowerCase().includes("queue") || (o.varName || "").toLowerCase().includes("q"));
+            const queueItems = [];
+            if (queueObj && queueObj.elements) {
+                queueObj.elements.forEach(e => {
+                    const v = String(e.val || "").replace(/['"]/g, '');
+                    if (v) queueItems.push(v);
+                });
+            }
+
+            const heapObj = objects.find(o => (o.varName || "").toLowerCase().includes("heap") || (o.varName || "").toLowerCase().includes("pq"));
+
+            const inDegrees = new Map();
+            allNodes.forEach(n => inDegrees.set(n, 0));
+            Object.keys(graphData).forEach(u => {
+                (graphData[u] || []).forEach(v => {
+                    inDegrees.set(v, (inDegrees.get(v) || 0) + 1);
+                });
+            });
+
+            const nodeLevels = new Map();
+            const roots = Array.from(allNodes).filter(n => (inDegrees.get(n) || 0) === 0);
+            if (roots.length === 0 && allNodes.size > 0) roots.push(Array.from(allNodes)[0]);
+
+            const queueBfs = [...roots.map(r => ({ id: r, level: 0 }))];
+            roots.forEach(r => nodeLevels.set(r, 0));
+
+            while (queueBfs.length > 0) {
+                const { id, level } = queueBfs.shift();
+                const neighbors = graphData[id] || [];
+                neighbors.forEach(nbr => {
+                    if (!nodeLevels.has(nbr) || nodeLevels.get(nbr) < level + 1) {
+                        nodeLevels.set(nbr, level + 1);
+                        queueBfs.push({ id: nbr, level: level + 1 });
+                    }
+                });
+            }
+
+            allNodes.forEach(n => { if (!nodeLevels.has(n)) nodeLevels.set(n, 0); });
+
+            const levelGroups = new Map();
+            allNodes.forEach(n => {
+                const lvl = nodeLevels.get(n) || 0;
+                if (!levelGroups.has(lvl)) levelGroups.set(lvl, []);
+                levelGroups.get(lvl).push(n);
+            });
+
+            const graphEntities = [];
+            const canvasCenterX = (this.canvas.width / 2) || 450;
+
+            levelGroups.forEach((nodesOnLevel, lvl) => {
+                const count = nodesOnLevel.length;
+                const spacingX = 160;
+                const levelY = 75 + lvl * 90;
+                
+                nodesOnLevel.forEach((nId, idx) => {
+                    const posX = canvasCenterX + (idx - (count - 1) / 2) * spacingX;
+                    const neighborIds = (graphData[nId] || []).map(v => `gnode_${v}`);
+                    
+                    graphEntities.push({
+                        id: `gnode_${nId}`,
+                        varName: nId,
+                        label: nId,
+                        type: "GraphNode",
+                        pyType: "str",
+                        x: posX,
+                        y: levelY,
+                        neighbors: neighborIds,
+                        rawNeighbors: graphData[nId] || [],
+                        isVisited: visitedItems.has(nId),
+                        isCurrent: currentNode === nId,
+                        inQueue: queueItems.includes(nId),
+                        color: currentNode === nId ? "#F59E0B" : (visitedItems.has(nId) ? "#10B981" : (queueItems.includes(nId) ? "#38BDF8" : "#6366F1"))
+                    });
+                });
+            });
+
+            const dockY = 460;
+            if (queueObj) {
+                graphEntities.push({
+                    id: "dock_queue",
+                    type: "QueueDock",
+                    varName: queueObj.varName || "queue",
+                    x: 180,
+                    y: dockY,
+                    items: queueItems,
+                    color: "#38BDF8"
+                });
+            }
+
+            if (nodeObj) {
+                graphEntities.push({
+                    id: "dock_current",
+                    type: "CurrentNodeDock",
+                    varName: nodeObj.varName || "node",
+                    label: currentNode || String(nodeObj.label || ""),
+                    x: 380,
+                    y: dockY,
+                    color: "#F59E0B"
+                });
+            }
+
+            if (visitedObj) {
+                graphEntities.push({
+                    id: "dock_visited",
+                    type: "VisitedDock",
+                    varName: visitedObj.varName || "visited",
+                    x: 580,
+                    y: dockY,
+                    items: Array.from(visitedItems),
+                    color: "#10B981"
+                });
+            }
+
+            if (heapObj) {
+                const heapVals = (heapObj.elements || []).map(e => String(e.val || ''));
+                graphEntities.push({
+                    id: "dock_heap",
+                    type: "HeapDock",
+                    varName: heapObj.varName || "heap",
+                    x: 780,
+                    y: dockY,
+                    items: heapVals,
+                    color: "#8B5CF6"
+                });
+            }
+
+            return graphEntities;
+        }
+
         const profile = this.detectDomain(objects, this.detectTopology(objects));
 
 
@@ -1764,7 +1956,7 @@ json.dumps({
                     if (colY > maxColY) maxColY = colY;
                 });
 
-            } else if (firstType === "ClassObject") {
+            } else if (firstType === "ClassObject" && !(profile && (profile.topology === "NaryTree" || profile.topology === "BinaryTree"))) {
                 const classGroups = new Map();
                 groupObjects.forEach(obj => {
                     const cType = obj.pyType || "ClassObject";
@@ -2869,24 +3061,51 @@ json.dumps({
                 this.ctx.textBaseline = "middle";
                 this.ctx.fillText(`📊 ${entity.varName} [${rows}×${cols}]`, startX - 24, startY - 16);
 
+                // Extract active primitive loop variables (i, j, r, c, row, col) for dynamic Matrix cell cursor
+                let activeRow = null;
+                let activeCol = null;
+                let rowVarName = "i";
+                let colVarName = "j";
+
+                const primitiveEntities = Array.from(this.entities.values()).filter(e => e.type === "Primitive");
+                const rowEntity = primitiveEntities.find(p => ["i", "r", "row"].includes(p.varName));
+                const colEntity = primitiveEntities.find(p => ["j", "c", "col"].includes(p.varName));
+
+                if (rowEntity) {
+                    const rawVal = parseInt(rowEntity.label.includes('=') ? rowEntity.label.split('=').pop().trim() : rowEntity.label, 10);
+                    if (!isNaN(rawVal)) {
+                        activeRow = rawVal;
+                        rowVarName = rowEntity.varName;
+                    }
+                }
+                if (colEntity) {
+                    const rawVal = parseInt(colEntity.label.includes('=') ? colEntity.label.split('=').pop().trim() : colEntity.label, 10);
+                    if (!isNaN(rawVal)) {
+                        activeCol = rawVal;
+                        colVarName = colEntity.varName;
+                    }
+                }
+
                 // Column Header Indices (c0, c1, c2...)
                 this.ctx.font = "600 10px Fira Code, monospace";
-                this.ctx.fillStyle = "#94A3B8";
                 this.ctx.textAlign = "center";
                 for (let c = 0; c < cols; c++) {
                     const cx = startX + c * cellW + cellW / 2;
-                    this.ctx.fillText(`c${c}`, cx, startY - 5);
+                    const isColActive = (activeCol === c);
+                    this.ctx.fillStyle = isColActive ? "#F59E0B" : "#94A3B8";
+                    this.ctx.fillText(isColActive ? `${colVarName}=${c}` : `c${c}`, cx, startY - 5);
                 }
 
                 // Render Cells with Row Header Indices (r0, r1, r2...)
                 for (let r = 0; r < rows; r++) {
                     const ry = startY + r * cellH;
+                    const isRowActive = (activeRow === r);
                     
                     // Row Header Index
                     this.ctx.font = "600 10px Fira Code, monospace";
-                    this.ctx.fillStyle = "#94A3B8";
+                    this.ctx.fillStyle = isRowActive ? "#F59E0B" : "#94A3B8";
                     this.ctx.textAlign = "right";
-                    this.ctx.fillText(`r${r}`, startX - 8, ry + cellH / 2);
+                    this.ctx.fillText(isRowActive ? `${rowVarName}=${r}` : `r${r}`, startX - 8, ry + cellH / 2);
 
                     const rowData = entity.data ? entity.data[r] : [];
                     for (let c = 0; c < cols; c++) {
@@ -2899,10 +3118,16 @@ json.dumps({
                             this.selectedMatrixCell.r === r && 
                             this.selectedMatrixCell.c === c;
 
+                        const isActiveCell = (activeRow === r && activeCol === c);
+
                         this.ctx.beginPath();
                         this.ctx.roundRect(rx + 2, ry + 2, cellW - 4, cellH - 4, 4);
 
-                        if (isCellSelected) {
+                        if (isActiveCell) {
+                            this.ctx.fillStyle = "rgba(245, 158, 11, 0.4)"; // Amber active cell highlight
+                            this.ctx.strokeStyle = "#F59E0B";
+                            this.ctx.lineWidth = 2;
+                        } else if (isCellSelected) {
                             this.ctx.fillStyle = "rgba(99, 102, 241, 0.5)";
                             this.ctx.strokeStyle = "#818CF8";
                             this.ctx.lineWidth = 2;
@@ -2915,7 +3140,7 @@ json.dumps({
                         this.ctx.stroke();
 
                         // Cell Value
-                        this.ctx.fillStyle = isCellSelected ? "#FFFFFF" : "#F1F5F9";
+                        this.ctx.fillStyle = (isActiveCell || isCellSelected) ? "#FFFFFF" : "#F1F5F9";
                         this.ctx.font = "600 12px Fira Code, monospace";
                         this.ctx.textAlign = "center";
                         this.ctx.textBaseline = "middle";
@@ -3027,10 +3252,6 @@ json.dumps({
         if (entity.type === "MatrixGrid" && this.selectedMatrixCell) {
             const cell = this.selectedMatrixCell.cellItem;
             this.inspectorContent.innerHTML = `
-                <div class="dock-section" id="variables-dock">
-                    <div class="dock-section-title">📌 Active Variables</div>
-                    <div class="variables-dock-content" id="variables-dock-content"></div>
-                </div>
                 <div class="dock-section" id="inspector-details">
                     <div class="dock-section-title">Matrix Cell Inspector</div>
                     <div class="inspect-item">

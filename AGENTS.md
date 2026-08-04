@@ -1,10 +1,9 @@
 # AGENTS.md — RVE Studio: Runtime Visualization Engine
 # Project Intelligence Manifest for Antigravity (AGY)
 
-> **Scope**: This file is the single authoritative operating context for any AI agent
-> working on this project. It defines how the agent should think, search,
-> edit, and reason — going beyond "just coding" into being an active
-> co-architect of a visualization engine.
+> **Scope & Mandatory Rule**: This file, along with [`agent.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/agent.md) and [`LESSONS_LEARNED.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/LESSONS_LEARNED.md), constitutes the single authoritative operating context for any AI agent working on this project.
+> **EVERY USER REQUEST MUST USE AND ADHERE TO `AGENTS.md`, `agent.md`, AND `LESSONS_LEARNED.md`**.
+> They define how the agent should think, search, edit, collaborate, and reason — going beyond "just coding" into being an active co-architect of a visualization engine.
 
 ---
 
@@ -345,3 +344,4 @@ Font stack: `Inter` for UI, `Fira Code` for code/terminal/node labels. Always us
 | `/ce-frontend-design` | Any CSS/UI polish pass on the studio interface |
 | `/learn` | After fixing a recurring bug |
 | `/teamwork-preview` | Parallel agent delegation |
+
