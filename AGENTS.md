@@ -1,8 +1,8 @@
 # AGENTS.md — RVE Studio: Runtime Visualization Engine
 # Project Intelligence Manifest for Antigravity (AGY)
 
-> **Scope & Mandatory Rule**: This file, along with [`agent.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/agent.md) and [`LESSONS_LEARNED.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/LESSONS_LEARNED.md), constitutes the single authoritative operating context for any AI agent working on this project.
-> **EVERY USER REQUEST MUST USE AND ADHERE TO `AGENTS.md`, `agent.md`, AND `LESSONS_LEARNED.md`**.
+> **Scope & Mandatory Rule**: This file, along with [`agent.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/agent.md), [`LESSONS_LEARNED.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/LESSONS_LEARNED.md), and [`VISUAL_QA.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/VISUAL_QA.md), constitutes the single authoritative operating context for any AI agent working on this project.
+> **EVERY USER REQUEST MUST USE AND ADHERE TO `AGENTS.md`, `agent.md`, `LESSONS_LEARNED.md`, AND `VISUAL_QA.md`**.
 > They define how the agent should think, search, edit, collaborate, and reason — going beyond "just coding" into being an active co-architect of a visualization engine.
 
 ---
@@ -214,6 +214,21 @@ Kimi-K3 (`moonshotai/kimi-k3-free`) via TokenRouter (`https://api.tokenrouter.co
   ```powershell
   python kimi_mentor.py -p "Review the visual representation and layout geometry of the matrix comprehension canvas"
   ```
+
+### Visual QA Loop & 10-Metric Evaluation Matrix
+- **Strict Reviewer Question**: Kimi NEVER says "looks good". It explicitly asks: *"What educational concepts are still invisible?"*
+- **10-Metric Scorecard**: Every visual output is scored across 10 criteria:
+  1. Semantic Accuracy (/10)
+  2. Runtime Accuracy (/10)
+  3. Educational Clarity (/10)
+  4. Memory Representation (/10)
+  5. Layout Quality (/10)
+  6. Animation Quality (/10)
+  7. Visual Hierarchy (/10)
+  8. Camera Behavior (/10)
+  9. Scalability (/10)
+  10. Beginner Friendliness (/10)
+- **Dataset Log**: All visual QA reviews, problem breakdowns, and priority fixes MUST be logged in [`VISUAL_QA.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/VISUAL_QA.md).
 
 ---
 

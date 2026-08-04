@@ -1,17 +1,17 @@
 # agent.md — Bootstrap Manifest & Multi-Agent Directive
 
 > **MANDATORY DIRECTIVE FOR EVERY USER REQUEST**:
-> AI agents MUST strictly load, consult, and adhere to [`AGENTS.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/AGENTS.md), [`agent.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/agent.md), and [`LESSONS_LEARNED.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/LESSONS_LEARNED.md) for **every single request** received from the user.
+> AI agents MUST strictly load, consult, and adhere to [`AGENTS.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/AGENTS.md), [`agent.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/agent.md), [`LESSONS_LEARNED.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/LESSONS_LEARNED.md), and [`VISUAL_QA.md`](file:///C:/Users/samar/OneDrive/Desktop/projects/DSA_visualizer/VISUAL_QA.md) for **every single request** received from the user.
 > 
 > **COMPULSORY KIMI MENTOR INVOCATION DIRECTIVE**:
-> Invocation of `kimi_mentor.py` / `kimi_agent.py` is **STRICTLY COMPULSORY** for every non-trivial feature, visual layout change, renderer update, or architectural modification. No non-trivial change may be committed without Kimi Mentor review and visual verification.
+> Invocation of `kimi_mentor.py` / `kimi_agent.py` is **STRICTLY COMPULSORY** for every non-trivial feature, visual layout change, renderer update, or architectural modification. No non-trivial change may be committed without Kimi Mentor review, 10-metric evaluation, and visual verification.
 
-This repository uses **`AGENTS.md`** as the single authoritative engineering specification, **`agent.md`** as the bootstrap manifest, and **`LESSONS_LEARNED.md`** as the continuous learning log.
+This repository uses **`AGENTS.md`** as the single authoritative engineering specification, **`agent.md`** as the bootstrap manifest, **`LESSONS_LEARNED.md`** as the continuous learning log, and **`VISUAL_QA.md`** as the visual critique dataset.
 
 All AI agents must:
 
-1. Consult and follow `AGENTS.md`, `agent.md`, and `LESSONS_LEARNED.md` completely for **every user request** and before making any modification.
-2. Treat `AGENTS.md`, `agent.md`, and `LESSONS_LEARNED.md` as the combined sources of truth for:
+1. Consult and follow `AGENTS.md`, `agent.md`, `LESSONS_LEARNED.md`, and `VISUAL_QA.md` completely for **every user request** and before making any modification.
+2. Treat `AGENTS.md`, `agent.md`, `LESSONS_LEARNED.md`, and `VISUAL_QA.md` as the combined sources of truth for:
    - Architecture
    - Coding standards
    - Rendering pipeline
